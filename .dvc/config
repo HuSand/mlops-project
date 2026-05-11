@@ -1,4 +1,6 @@
 [core]
-    remote = myremote
+    remote = gcsremote
 ['remote "myremote"']
     url = E:\datasets\insurance-dataset
+['remote "gcsremote"']
+    url = gs://pso-mlops-dvc-sandy/dvc-store
