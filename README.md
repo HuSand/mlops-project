@@ -317,17 +317,38 @@ mlops-project/
 
 ## 5. Branching Strategy and Environments
 
+We use a **two-branch deployment model**: `dev` for staging, `prod` for production. The `main` branch is GitHub's default for clones and README display only, kept in sync with `prod` post-merge.
+
 ### Branch Model
 
 ```
-main          production-ready code, protected
- │            requires 2 reviewers, all checks pass
+prod          production environment, protected
+ │            requires 2 reviewers + all checks pass
+ │            push triggers CD to production
  │
-dev           staging integration, protected
- │            requires 1 reviewer, all checks pass
+ │   promote via PR (dev -> prod)
+ │
+dev           staging environment, protected, integration trunk
+ │            requires 1 reviewer + all checks pass
+ │            push triggers CD to staging
+ │
+ │   PR from feat/*
  │
 feat/*        feature branches, free push
- │            opens PR to dev when ready
+              opens PR to dev when ready
+
+main          GitHub default branch (clone + README display only)
+              auto-mirrored from prod post-merge, no direct work
+```
+
+### Promotion Flow
+
+```
+feat/your-feature  --PR-->  dev  --PR (promote)-->  prod
+                            |                       |
+                            v                       v
+                       staging env            production env
+                       (auto deploy)          (manual approval)
 ```
 
 ### Environment Mapping
@@ -336,23 +357,39 @@ feat/*        feature branches, free push
 |---|---|---|---|---|
 | `feat/*` | none | local docker only | none | local docker-compose |
 | `dev` | `development` | Cloud Run `insurance-api-dev` (auto) | Vercel Preview | Cloud SQL `app_dev` |
-| `main` | `production` | Cloud Run `insurance-api-prod` (approval) | Vercel Production | Cloud SQL `app_prod` |
+| `prod` | `production` | Cloud Run `insurance-api-prod` (approval) | Vercel Production | Cloud SQL `app_prod` |
+| `main` | none | none (display only) | none (display only) | none |
 | PR | none | none | Vercel Preview per PR | none |
 
 ### Branch Protection Rules
 
-**`main`** branch:
+**`prod`** branch:
 - Require 2 approving reviews
 - Dismiss stale reviews on new commit
 - Require status checks: `ci.yml` all jobs
 - Require branches to be up to date
 - Require linear history
 - Disallow force push
+- Restrict who can push (only via PR from `dev`)
 
 **`dev`** branch:
 - Require 1 approving review
 - Require status checks: `ci.yml` lint + test + security
 - Require branches to be up to date
+- Allow merge from `feat/*` PRs
+
+**`main`** branch:
+- Mirror-only target, auto-synced from `prod` post-merge (no direct work)
+- Disallow force push
+
+### Why this model
+
+| Reason | Benefit |
+|---|---|
+| Separate `dev` and `prod` branches | Each branch maps 1-to-1 with a runtime environment — clear mental model |
+| `main` kept as GitHub default | Clones and README display correctly; no breaking convention |
+| PR `dev -> prod` is the promotion gate | Production deploys are explicit, reviewable, and revertable |
+| `feat/*` always targets `dev` | Prevents accidental direct PR to prod |
 
 ---
 
@@ -393,7 +430,7 @@ Person 4  →  CM + Infrastructure      tests/     all 4 contribute
 **Deliverables**:
 - Every PR passes 9 quality gates before merge
 - Coverage badge live in README at >= 70%
-- Zero broken commit reaches `main`
+- Zero broken commit reaches `dev` or `prod`
 - Security alerts triaged within 24 hours
 
 **KPI for evaluation**:
@@ -559,13 +596,13 @@ Each owner **must** document their pipeline in `docs/` so buddy can take over wi
 
 ### 7.1 Purpose
 
-Ensure every Pull Request is safe to merge into `dev` or `main`. Block bad code from reaching the protected branches.
+Ensure every Pull Request is safe to merge into `dev` or `prod`. Block bad code from reaching the protected branches.
 
 ### 7.2 Trigger Conditions
 
 | Trigger | Condition |
 |---|---|
-| `pull_request` | any PR opened or updated targeting `dev` or `main` |
+| `pull_request` | any PR opened or updated targeting `dev` or `prod` |
 | `push` | any push to `feat/*` branches |
 
 ### 7.3 Job-by-Job Detail
@@ -686,7 +723,7 @@ Automatically retrain the model when data, config, or schedule triggers indicate
 |---|---|
 | `workflow_dispatch` | manual click in GitHub UI |
 | `schedule` | cron `0 2 * * 1` (Monday 02:00 WIB) |
-| `push` to `main` | paths include `ml/config.yml` or `ml/**` or `dvc.lock` |
+| `push` to `prod` | paths include `ml/config.yml` or `ml/**` or `dvc.lock` |
 | `repository_dispatch` | event type `drift-retrain` from CM workflow |
 
 ### 8.3 Job-by-Job Detail
@@ -770,7 +807,7 @@ Automatically retrain the model when data, config, or schedule triggers indicate
 | DVC push | `dvc push --remote gcsremote` | upload to GCS |
 | Git config bot | shell | set `github-actions[bot]` user |
 | Git commit | `chore(model): retrain model-v{n}` | commit `.dvc` files |
-| Git push | `git push origin main` | trigger CD downstream |
+| Git push | `git push origin prod` | trigger CD downstream |
 
 #### Job 9: GitHub Release
 
@@ -814,7 +851,7 @@ Deploy FastAPI backend container to Cloud Run with database migration, canary tr
 | Trigger | Behavior |
 |---|---|
 | `push` to `dev` | auto-deploy to `insurance-api-dev` |
-| `push` to `main` | requires Manual Approval Gate, then deploy to `insurance-api-prod` |
+| `push` to `prod` | requires Manual Approval Gate, then deploy to `insurance-api-prod` |
 | `workflow_dispatch` | manual deploy with optional rollback flag |
 | `workflow_call` from `ct-train.yml` | auto-deploy after new model promoted |
 
@@ -952,7 +989,7 @@ Deploy Next.js frontend to Vercel with Lighthouse performance gate, E2E smoke te
 | Trigger | Behavior |
 |---|---|
 | `push` to `dev` | auto-deploy to Vercel Development |
-| `push` to `main` | requires Manual Approval Gate, then Production |
+| `push` to `prod` | requires Manual Approval Gate, then Production |
 | `pull_request` | per-PR preview deployment |
 
 ### 10.3 Job-by-Job Detail
@@ -1499,7 +1536,7 @@ cd frontend && pnpm dev
 | Frontend deployment | `vercel rollback` |
 | Database migration | `alembic downgrade -1` |
 | Model in production | MLflow API: promote previous version to Production |
-| Bad commit on main | revert PR, do not force-push |
+| Bad commit on prod | revert PR, do not force-push |
 
 ### 15.3 Escalation
 
