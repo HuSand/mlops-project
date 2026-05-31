@@ -21,10 +21,11 @@ class Trainer:
             return yaml.safe_load(config_file)
         
     def create_pipeline(self):
+        # Semua kolom feature_0 sampai feature_9 adalah numerik
+        numeric_cols = [f'feature_{i}' for i in range(10)]
+        
         preprocessor = ColumnTransformer(transformers=[
-            ('minmax', MinMaxScaler(), ['AnnualPremium']),
-            ('standardize', StandardScaler(), ['Age','RegionID']),
-            ('onehot', OneHotEncoder(handle_unknown='ignore'), ['Gender', 'PastAccident']),
+            ('standardize', StandardScaler(), numeric_cols),
         ])
         
         smote = SMOTE(sampling_strategy=1.0)
@@ -34,16 +35,14 @@ class Trainer:
             'DecisionTreeClassifier': DecisionTreeClassifier,
             'GradientBoostingClassifier': GradientBoostingClassifier
         }
-    
+
         model_class = model_map[self.model_name]
         model = model_class(**self.model_params)
-
         pipeline = Pipeline([
             ('preprocessor', preprocessor),
             ('smote', smote),
             ('model', model)
         ])
-
         return pipeline
 
     def feature_target_separator(self, data):

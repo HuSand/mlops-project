@@ -45,6 +45,8 @@ def main():
 
 
 def train_with_mlflow():
+    mlflow.set_tracking_uri("sqlite:///mlflow.db")      
+    mlflow.set_experiment("insurance_model_training")    
 
     with open('config.yml', 'r') as file:
         config = yaml.safe_load(file)
@@ -78,7 +80,7 @@ def train_with_mlflow():
         logging.info("Model evaluation completed successfully")
         
         # Tags 
-        mlflow.set_tag('Model developer', 'prsdm')
+        mlflow.set_tag('Model developer', 'gerald')
         mlflow.set_tag('preprocessing', 'OneHotEncoder, Standard Scaler, and MinMax Scaler')
         
         # Log metrics

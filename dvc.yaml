@@ -1,0 +1,33 @@
+stages:
+  data_validation:
+    cmd: python ml/validate.py data/train.csv && python ml/validate.py data/test.csv
+    deps:
+      - ml/validate.py
+      - data/train.csv
+      - data/test.csv
+
+  train:
+    cmd: python main.py
+    deps:
+      - main.py
+      - steps/
+      - data/train.csv
+      - data/test.csv
+      - config.yml
+    params:
+      - config.yml:
+          - model
+          - train
+    outs:
+      - models/model.pkl
+
+  evaluate:
+    cmd: python scripts/evaluate.py
+    deps:
+      - scripts/evaluate.py
+      - steps/predict.py
+      - models/model.pkl
+      - data/test.csv
+    metrics:
+      - metrics.json:
+          cache: false

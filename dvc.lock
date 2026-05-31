@@ -1,0 +1,83 @@
+schema: '2.0'
+stages:
+  data_validation:
+    cmd: python ml/validate.py data/train.csv && python ml/validate.py 
+      data/test.csv
+    deps:
+    - path: data/test.csv
+      hash: md5
+      md5: 9422d87edc343113f36b45f317709d1a
+      size: 3928750
+    - path: data/train.csv
+      hash: md5
+      md5: 6160386fdbea13c11fa556928b10937d
+      size: 15708080
+    - path: ml/validate.py
+      hash: md5
+      md5: 67d22eb7e690abd13a007740f71bc0b2
+      size: 3067
+  train:
+    cmd: python main.py
+    deps:
+    - path: config.yml
+      hash: md5
+      md5: 5e4106aaceaed2f3bd1fbf7b4d7d4911
+      size: 518
+    - path: data/test.csv
+      hash: md5
+      md5: 9422d87edc343113f36b45f317709d1a
+      size: 3928750
+    - path: data/train.csv
+      hash: md5
+      md5: 6160386fdbea13c11fa556928b10937d
+      size: 15708080
+    - path: main.py
+      hash: md5
+      md5: b1dc73e48ae7a773041a5c9750c68958
+      size: 4251
+    - path: steps/
+      hash: md5
+      md5: 4a3921c6835231396139685a71df39cf.dir
+      size: 14779
+      nfiles: 10
+    params:
+      config.yml:
+        model:
+          name: DecisionTreeClassifier
+          params:
+            criterion: entropy
+            max_depth:
+          store_path: models/
+        train:
+          test_size: 0.2
+          random_state: 42
+          shuffle: true
+    outs:
+    - path: models/model.pkl
+      hash: md5
+      md5: 3208de5a4e467749a707a66d264ba96b
+      size: 821860
+  evaluate:
+    cmd: python scripts/evaluate.py
+    deps:
+    - path: data/test.csv
+      hash: md5
+      md5: 9422d87edc343113f36b45f317709d1a
+      size: 3928750
+    - path: models/model.pkl
+      hash: md5
+      md5: 3208de5a4e467749a707a66d264ba96b
+      size: 821860
+    - path: scripts/evaluate.py
+      hash: md5
+      md5: d06dd48df68146e554a02e41d65c557b
+      size: 568
+    - path: steps/predict.py
+      hash: md5
+      md5: e7e220c2fc74ea47444d2695de740a51
+      size: 1008
+    outs:
+    - path: metrics.json
+      hash: md5
+      md5: 0900db4fb591ba26e829aa1f7fe408f0
+      size: 50
