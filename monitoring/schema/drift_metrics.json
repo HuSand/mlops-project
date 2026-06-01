@@ -1,0 +1,38 @@
+[
+    {
+        "name": "date",
+        "type": "DATE",
+        "mode": "REQUIRED"
+    },
+    {
+        "name": "timestamp",
+        "type": "TIMESTAMP",
+        "mode": "REQUIRED"
+    },
+    {
+        "name": "drift_share",
+        "type": "FLOAT",
+        "mode": "NULLABLE"
+    },
+    {
+        "name": "number_of_drifted_columns",
+        "type": "INTEGER",
+        "mode": "NULLABLE"
+    },
+    {
+        "name": "number_of_columns",
+        "type": "INTEGER",
+        "mode": "NULLABLE"
+    },
+    {
+        "name": "dataset_drift",
+        "type": "BOOLEAN",
+        "mode": "NULLABLE"
+    },
+    {
+        "name": "drifted_features",
+        "type": "STRING",
+        "mode": "NULLABLE",
+        "description": "JSON string containing details of drifted features"
+    }
+]

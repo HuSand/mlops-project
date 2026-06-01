@@ -7,8 +7,12 @@ Membandingkan reference data (training) vs current data (production).
 import argparse
 import json
 import pandas as pd
-from evidently.report import Report
-from evidently.metric_preset import DataDriftPreset, TargetDriftPreset, DataQualityPreset
+try:
+    from evidently.report import Report
+    from evidently.metric_preset import DataDriftPreset, TargetDriftPreset, DataQualityPreset
+except ImportError:
+    from evidently.legacy.report import Report
+    from evidently.legacy.metric_preset import DataDriftPreset, TargetDriftPreset, DataQualityPreset
 
 
 def run_drift_report(reference_path: str, current_path: str, output_html: str, output_json: str):
