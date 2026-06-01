@@ -1,0 +1,303 @@
+name: CT Pipeline
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 2 * * 1'
+  push:
+    paths:
+      - 'ml/**'
+      - 'config.yml'
+      - 'dvc.lock'
+  repository_dispatch:
+    types: [drift-retrain]
+
+permissions:
+  contents: write
+  issues: write
+  id-token: write
+
+env:
+  MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
+  MLFLOW_TRACKING_TOKEN: ${{ secrets.MLFLOW_TRACKING_TOKEN }}
+
+jobs:
+  # JOB 1: Auth GCP
+  auth:
+    name: Authenticate to GCP
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/721834211942/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+          service_account: 'mlops-ct-pipeline@project-d50e88c7-b681-48d4-b1b.iam.gserviceaccount.com'
+      - uses: google-github-actions/setup-gcloud@v2
+      - run: gsutil ls gs://dvc-mlops-ct-pipeline
+
+  # JOB 2: DVC Pull
+  dvc-pull:
+    name: Pull Data from GCS
+    needs: auth
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/721834211942/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+          service_account: 'mlops-ct-pipeline@project-d50e88c7-b681-48d4-b1b.iam.gserviceaccount.com'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install "dvc[gs]"
+      - run: dvc pull
+      - run: |
+          echo "## Data Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- train.csv rows: $(wc -l < data/train.csv)" >> $GITHUB_STEP_SUMMARY
+          echo "- test.csv rows: $(wc -l < data/test.csv)" >> $GITHUB_STEP_SUMMARY
+
+  # JOB 3: Data Validation
+  data-validation:
+    name: Validate Data
+    needs: dvc-pull
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/721834211942/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+          service_account: 'mlops-ct-pipeline@project-d50e88c7-b681-48d4-b1b.iam.gserviceaccount.com'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - run: dvc pull
+      - run: python ml/validate.py data/train.csv
+      - run: python ml/validate.py data/test.csv --no-target
+      - name: Create issue on failure
+        if: failure()
+        run: |
+          gh issue create \
+            --title "Data validation failed - CT Pipeline run #${{ github.run_number }}" \
+            --body "Validation gagal pada run #${{ github.run_number }}. Cek logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            --label "data-quality"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # JOB 4: Training
+  train:
+    name: Train Model
+    needs: data-validation
+    runs-on: ubuntu-latest
+    outputs:
+      run_id: ${{ steps.get-run-id.outputs.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/721834211942/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+          service_account: 'mlops-ct-pipeline@project-d50e88c7-b681-48d4-b1b.iam.gserviceaccount.com'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - run: pip install "dvc[gs]"
+      - run: dvc pull
+      - run: python main.py
+      - name: Get MLflow run ID
+        id: get-run-id
+        run: |
+          RUN_ID=$(python -c "
+          import mlflow
+          import os
+          mlflow.set_tracking_uri(os.environ['MLFLOW_TRACKING_URI'])
+          client = mlflow.tracking.MlflowClient()
+          exps = client.search_experiments()
+          exp_ids = [e.experiment_id for e in exps]
+          runs = client.search_runs(experiment_ids=exp_ids, order_by=['start_time DESC'], max_results=1)
+          print(runs[0].info.run_id)
+          ")
+          echo "run_id=$RUN_ID" >> $GITHUB_OUTPUT
+
+  # JOB 5: Register ke Staging
+  register:
+    name: Register Model to Staging
+    needs: train
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - run: |
+          python -c "
+          import mlflow, os
+          mlflow.set_tracking_uri(os.environ['MLFLOW_TRACKING_URI'])
+          client = mlflow.tracking.MlflowClient()
+          run_id = '${{ needs.train.outputs.run_id }}'
+          mv = client.create_model_version(
+              name='insurance_model',
+              source=f'runs:/{run_id}/model',
+              run_id=run_id,
+              description='Auto-registered by CT pipeline run #${{ github.run_number }}'
+          )
+          client.transition_model_version_stage(
+              name='insurance_model',
+              version=mv.version,
+              stage='Staging'
+          )
+          print(f'Registered version {mv.version} to Staging')
+          "
+
+  # JOB 6: Champion vs Challenger
+  evaluate:
+    name: Champion vs Challenger
+    needs: [train, register]
+    runs-on: ubuntu-latest
+    outputs:
+      decision: ${{ steps.get-decision.outputs.decision }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/721834211942/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+          service_account: 'mlops-ct-pipeline@project-d50e88c7-b681-48d4-b1b.iam.gserviceaccount.com'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - run: pip install "dvc[gs]"
+      - run: dvc pull
+      - run: python scripts/promote_model.py ${{ needs.train.outputs.run_id }} || true
+      - name: Get decision
+        id: get-decision
+        run: |
+          DECISION=$(python -c "import json; print(json.load(open('promote_decision.json'))['decision'])")
+          echo "decision=$DECISION" >> $GITHUB_OUTPUT
+      - uses: actions/upload-artifact@v4
+        with:
+          name: promote-decision
+          path: promote_decision.json
+
+  # JOB 7: Promote ke Production
+  promote:
+    name: Promote to Production
+    needs: [train, evaluate]
+    if: needs.evaluate.outputs.decision == 'PROMOTE'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - run: |
+          python -c "
+          import mlflow, os
+          mlflow.set_tracking_uri(os.environ['MLFLOW_TRACKING_URI'])
+          client = mlflow.tracking.MlflowClient()
+          versions = client.get_latest_versions('insurance_model', stages=['Staging'])
+          for v in versions:
+              client.transition_model_version_stage(
+                  name='insurance_model',
+                  version=v.version,
+                  stage='Production',
+                  archive_existing_versions=True
+              )
+              print(f'Promoted version {v.version} to Production')
+          "
+      - run: |
+          python scripts/gen_model_card.py \
+            --run-id ${{ needs.train.outputs.run_id }} \
+            --model-version latest \
+            --output model_card.md
+
+  # JOB 8: DVC Push + Auto Commit
+  artifact-versioning:
+    name: Push Artifacts and Commit
+    needs: promote
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/721834211942/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+          service_account: 'mlops-ct-pipeline@project-d50e88c7-b681-48d4-b1b.iam.gserviceaccount.com'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - run: pip install "dvc[gs]"
+      - run: dvc pull
+      - run: python main.py
+      - run: dvc add models/model.pkl
+      - run: dvc push
+      - run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add models.dvc dvc.lock
+          git commit -m "chore(model): retrain model-v${{ github.run_number }}"
+          git push origin ${{ github.ref_name }}
+
+  # JOB 9: GitHub Release
+  release:
+    name: Create GitHub Release
+    needs: [train, artifact-versioning]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - run: |
+          python scripts/gen_model_card.py \
+            --run-id ${{ needs.train.outputs.run_id }} \
+            --model-version ${{ github.run_number }} \
+            --output model_card.md
+      - uses: actions/download-artifact@v4
+        with:
+          name: promote-decision
+      - uses: softprops/action-gh-release@v1
+        with:
+          tag_name: model-v${{ github.run_number }}
+          name: "Model v${{ github.run_number }}"
+          body: "Automated model release from CT Pipeline run #${{ github.run_number }}"
+          files: |
+            model_card.md
+            promote_decision.json
+
+  # JOB 10: Notify + Trigger CD
+  notify:
+    name: Notify and Chain
+    needs: evaluate
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: promote-decision
+      - name: Send Discord notification
+        run: |
+          DECISION=$(python -c "import json; d=json.load(open('promote_decision.json')); print(d['decision'])")
+          DELTA=$(python -c "import json; d=json.load(open('promote_decision.json')); print(f\"{d['accuracy_delta']:.4f}\")")
+          PVAL=$(python -c "import json; d=json.load(open('promote_decision.json')); print(f\"{d['p_value']:.4f}\")")
+          curl -X POST "${{ secrets.DISCORD_WEBHOOK_CT }}" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"embeds\": [{
+                \"title\": \"CT Pipeline — $DECISION\",
+                \"color\": $([ \"$DECISION\" = \"PROMOTE\" ] && echo 3066993 || echo 15158332),
+                \"fields\": [
+                  {\"name\": \"Accuracy Delta\", \"value\": \"$DELTA\", \"inline\": true},
+                  {\"name\": \"P-Value\", \"value\": \"$PVAL\", \"inline\": true},
+                  {\"name\": \"Run\", \"value\": \"#${{ github.run_number }}\", \"inline\": true}
+                ]
+              }]
+            }"
+      - name: Trigger CD
+        if: needs.evaluate.outputs.decision == 'PROMOTE'
+        run: gh workflow run cd-backend.yml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
