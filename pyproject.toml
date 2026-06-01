@@ -1,0 +1,8 @@
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+exclude = [".git", "venv", "__pycache__", ".github"]
+
+[tool.pytest.ini_options]
+addopts = "--cov=./ --cov-fail-under=70 -v"
+testpaths = ["tests", "backend/tests", "ml/tests"]
