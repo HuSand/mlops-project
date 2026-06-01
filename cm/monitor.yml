@@ -1,0 +1,189 @@
+name: Monitor - Drift Detection
+
+on:
+  schedule:
+    # Daily 06:00 WIB = 23:00 UTC previous day
+    - cron: '0 23 * * *'
+  workflow_dispatch:
+
+jobs:
+  run-evidently-report:
+    name: Run Evidently drift report and notify
+    runs-on: ubuntu-latest
+
+    steps:
+      # =============================================
+      # STEP 1: Setup environment
+      # =============================================
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install evidently pandas pyarrow google-cloud-bigquery google-cloud-storage dvc dvc-gs
+
+      # =============================================
+      # STEP 2: Authenticate to GCP
+      # =============================================
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Setup gcloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Verify GCP access
+        run: |
+          gsutil ls gs://${{ secrets.GCS_BUCKET }} || echo "Warning: Cannot access bucket"
+
+      # =============================================
+      # STEP 3: Fetch production data dari BigQuery
+      # =============================================
+      - name: Fetch production prediction logs from BigQuery
+        run: |
+          mkdir -p monitoring/data
+          python monitoring/fetch_production_data.py \
+            --project-id ${{ secrets.GCP_PROJECT_ID }} \
+            --output monitoring/data/current_data.csv
+
+      # =============================================
+      # STEP 4: Fetch reference data (training) via DVC
+      # =============================================
+      - name: Pull reference training data
+        run: |
+          dvc pull data/train.csv --remote gcsremote || echo "DVC pull failed, using local fallback"
+          cp data/train.csv monitoring/data/reference_data.csv
+
+      # =============================================
+      # STEP 5: Run Evidently drift report
+      # =============================================
+      - name: Run Evidently drift report
+        id: run_report
+        run: |
+          mkdir -p monitoring/reports
+          python monitoring/evidently_report.py \
+            --reference monitoring/data/reference_data.csv \
+            --current monitoring/data/current_data.csv \
+            --output-html monitoring/reports/drift_report.html \
+            --output-json monitoring/reports/drift_metrics.json
+
+      # =============================================
+      # STEP 6: Upload report HTML ke GCS
+      # =============================================
+      - name: Upload drift report to GCS
+        run: |
+          DATE=$(date +"%Y-%m-%d")
+          gsutil cp monitoring/reports/drift_report.html \
+            gs://${{ secrets.GCS_BUCKET }}/reports/drift_report_${DATE}.html
+          echo "Report uploaded: gs://${{ secrets.GCS_BUCKET }}/reports/drift_report_${DATE}.html"
+
+      # =============================================
+      # STEP 7: Write drift metrics ke BigQuery
+      # =============================================
+      - name: Write drift metrics to BigQuery
+        run: |
+          python monitoring/write_metrics_to_bq.py \
+            --project-id ${{ secrets.GCP_PROJECT_ID }} \
+            --metrics-file monitoring/reports/drift_metrics.json
+
+      # =============================================
+      # STEP 8: Check drift threshold
+      # =============================================
+      - name: Check drift threshold
+        id: check_threshold
+        run: |
+          DRIFT_SCORE=$(python -c "
+          import json
+          with open('monitoring/reports/drift_metrics.json') as f:
+              data = json.load(f)
+          print(data.get('drift_share', 0))
+          ")
+          echo "Drift score: $DRIFT_SCORE"
+          echo "DRIFT_SCORE=$DRIFT_SCORE" >> $GITHUB_OUTPUT
+
+          # Threshold 0.3 sesuai kesepakatan tim
+          THRESHOLD=0.3
+          DRIFT_DETECTED=$(python -c "print(1 if float('$DRIFT_SCORE') > $THRESHOLD else 0)")
+          echo "DRIFT_DETECTED=$DRIFT_DETECTED" >> $GITHUB_OUTPUT
+          echo "Drift detected: $DRIFT_DETECTED"
+
+      # =============================================
+      # STEP 9: Create GitHub Issue jika drift terdeteksi
+      # =============================================
+      - name: Create GitHub Issue for drift alert
+        if: steps.check_threshold.outputs.DRIFT_DETECTED == '1'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const driftScore = '${{ steps.check_threshold.outputs.DRIFT_SCORE }}';
+            const date = new Date().toISOString().split('T')[0];
+            const reportUrl = `https://storage.googleapis.com/${{ secrets.GCS_BUCKET }}/reports/drift_report_${date}.html`;
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Drift Alert: score ${driftScore} exceeds threshold (${date})`,
+              body: `## Data Drift Detected\n\n` +
+                    `- **Date**: ${date}\n` +
+                    `- **Drift Score**: ${driftScore}\n` +
+                    `- **Threshold**: 0.3\n` +
+                    `- **Report**: [View HTML Report](${reportUrl})\n\n` +
+                    `CT workflow has been auto-triggered for retraining.\n\n` +
+                    `_This issue was created automatically by the CM pipeline._`,
+              labels: ['drift-alert', 'priority-high']
+            });
+
+      # =============================================
+      # STEP 10: Trigger CT retrain jika drift terdeteksi
+      # =============================================
+      - name: Trigger Continuous Training workflow
+        if: steps.check_threshold.outputs.DRIFT_DETECTED == '1'
+        run: |
+          gh workflow run ct-train.yml \
+            --ref dev \
+            -f trigger=drift_alert
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # =============================================
+      # STEP 11: Discord notification
+      # =============================================
+      - name: Notify Discord
+        if: always()
+        run: |
+          DATE=$(date +"%Y-%m-%d")
+          DRIFT_SCORE="${{ steps.check_threshold.outputs.DRIFT_SCORE }}"
+          DRIFT_DETECTED="${{ steps.check_threshold.outputs.DRIFT_DETECTED }}"
+
+          if [ "$DRIFT_DETECTED" = "1" ]; then
+            COLOR=16711680  # red
+            STATUS="DRIFT DETECTED - Retrain triggered"
+          else
+            COLOR=65280  # green
+            STATUS="Model healthy - No drift"
+          fi
+
+          if [ -n "${{ secrets.DISCORD_WEBHOOK_ALERT }}" ]; then
+            curl -H "Content-Type: application/json" -d "{
+              \"embeds\": [{
+                \"title\": \"Daily Drift Report - ${DATE}\",
+                \"color\": ${COLOR},
+                \"fields\": [
+                  {\"name\": \"Status\", \"value\": \"${STATUS}\", \"inline\": true},
+                  {\"name\": \"Drift Score\", \"value\": \"${DRIFT_SCORE}\", \"inline\": true},
+                  {\"name\": \"Threshold\", \"value\": \"0.3\", \"inline\": true},
+                  {\"name\": \"Report\", \"value\": \"[View on GCS](https://storage.googleapis.com/${{ secrets.GCS_BUCKET }}/reports/drift_report_${DATE}.html)\"}
+                ]
+              }]
+            }" "${{ secrets.DISCORD_WEBHOOK_ALERT }}"
+          else
+            echo "No Discord webhook configured"
+          fi
