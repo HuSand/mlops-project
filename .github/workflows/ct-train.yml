@@ -19,7 +19,6 @@ permissions:
 
 env:
   MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
-  MLFLOW_TRACKING_TOKEN: ${{ secrets.MLFLOW_TRACKING_TOKEN }}
 
 jobs:
   # JOB 1: Auth GCP
@@ -70,6 +69,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+      - run: pip install "dvc[gs]"
       - run: pip install -r requirements.txt
       - run: dvc pull
       - run: python ml/validate.py data/train.csv
@@ -100,8 +100,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: pip install -r requirements.txt
       - run: pip install "dvc[gs]"
+      - run: pip install -r requirements.txt
       - run: dvc pull
       - run: python main.py
       - name: Get MLflow run ID
@@ -166,10 +166,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: pip install -r requirements.txt
       - run: pip install "dvc[gs]"
+      - run: pip install -r requirements.txt
       - run: dvc pull
-      - run: python scripts/promote_model.py ${{ needs.train.outputs.run_id }} || true
+      - run: |
+          python scripts/promote_model.py ${{ needs.train.outputs.run_id }} || python -c "
+          import json
+          with open('promote_decision.json', 'w') as f:
+              json.dump({'decision': 'KEEP_STAGING', 'accuracy_delta': 0, 'p_value': 1.0, 'challenger_accuracy': 0, 'champion_accuracy': 0, 'run_id': '${{ needs.train.outputs.run_id }}'}, f)
+          "
       - name: Get decision
         id: get-decision
         run: |
@@ -227,8 +232,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: pip install -r requirements.txt
       - run: pip install "dvc[gs]"
+      - run: pip install -r requirements.txt
       - run: dvc pull
       - run: python main.py
       - run: dvc add models/model.pkl
@@ -243,7 +248,8 @@ jobs:
   # JOB 9: GitHub Release
   release:
     name: Create GitHub Release
-    needs: [train, artifact-versioning]
+    needs: [train, artifact-versioning, evaluate]
+    if: needs.evaluate.outputs.decision == 'PROMOTE'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

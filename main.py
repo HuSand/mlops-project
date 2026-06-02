@@ -45,7 +45,7 @@ def main():
 
 
 def train_with_mlflow():
-    mlflow.set_tracking_uri("sqlite:///mlflow.db")      
+    mlflow.set_tracking_uri("https://mlflow-server-721834211942.asia-southeast1.run.app")     
     mlflow.set_experiment("insurance_model_training")    
 
     with open('config.yml', 'r') as file:
