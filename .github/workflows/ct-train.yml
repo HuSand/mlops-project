@@ -69,8 +69,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: pip install -r requirements.txt
       - run: pip install "dvc[gs]"
+      - run: pip install -r requirements.txt
       - run: dvc pull
       - run: python ml/validate.py data/train.csv
       - run: python ml/validate.py data/test.csv --no-target
@@ -100,8 +100,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: pip install -r requirements.txt
       - run: pip install "dvc[gs]"
+      - run: pip install -r requirements.txt
       - run: dvc pull
       - run: python main.py
       - name: Get MLflow run ID
@@ -166,8 +166,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: pip install -r requirements.txt
       - run: pip install "dvc[gs]"
+      - run: pip install -r requirements.txt
       - run: dvc pull
       - run: python scripts/promote_model.py ${{ needs.train.outputs.run_id }} || true
       - name: Get decision
@@ -227,8 +227,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - run: pip install -r requirements.txt
       - run: pip install "dvc[gs]"
+      - run: pip install -r requirements.txt
       - run: dvc pull
       - run: python main.py
       - run: dvc add models/model.pkl
