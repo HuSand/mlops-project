@@ -9,6 +9,7 @@ mkdocs==1.6.0
 mkdocs-material==9.5.31
 numpy ==1.26.4
 pandas==2.2.2
+db-dtypes>=1.1.1
 pandera>=0.18.0
 pytest==8.3.2
 PyYAML==6.0.1

@@ -39,7 +39,7 @@ jobs:
 
       - name: Fetch production prediction logs from BigQuery
         run: |
-          pip install pandas google-cloud-bigquery pyarrow
+          pip install pandas google-cloud-bigquery pyarrow db-dtypes
           mkdir -p monitoring/data
           python monitoring/fetch_production_data.py \
             --project-id ${{ secrets.GCP_PROJECT_ID }} \
