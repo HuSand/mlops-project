@@ -17,10 +17,19 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    model_mod.state["model"] = model_mod.load_model()
-    logger.info(
-        "Model loaded (env=%s, version=%s)", config.APP_ENV, config.MODEL_VERSION
-    )
+    # Boot even if the model is unavailable: the container must start and
+    # listen so the platform health check passes. /predict returns 503 until
+    # a model is loaded.
+    try:
+        model_mod.state["model"] = model_mod.load_model()
+        logger.info(
+            "Model loaded (env=%s, version=%s)",
+            config.APP_ENV,
+            config.MODEL_VERSION,
+        )
+    except Exception as e:  # noqa: BLE001 - never crash on startup
+        model_mod.state["model"] = None
+        logger.error("Model load failed at startup (serving 503 until fixed): %s", e)
     yield
     model_mod.state["model"] = None
 
