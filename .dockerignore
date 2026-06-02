@@ -23,3 +23,6 @@ LICENSE
 mkdocs.yml
 makefile
 requirements-dev.txt
+frontend
+node_modules
+**/node_modules

@@ -28,7 +28,8 @@ RUN groupadd --system app && useradd --system --gid app --home /home/app app \
 WORKDIR /app
 
 COPY --from=builder --chown=app:app /root/.local /home/app/.local
-COPY --chown=app:app app.py ./
+COPY --chown=app:app app/ ./app/
+# models/ may only contain .gitkeep; the model is fetched from GCS_MODEL_URI at startup.
 COPY --chown=app:app models/ ./models/
 
 USER app
