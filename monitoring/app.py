@@ -1,12 +1,34 @@
 import os
 import logging
+import json
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 import joblib
 import pandas as pd
-from fastapi import FastAPI, HTTPException
+import sentry_sdk
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
+from google.cloud import logging as cloud_logging
+
+# Setup Sentry
+SENTRY_DSN = os.getenv("SENTRY_DSN")
+if SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        traces_sample_rate=1.0,
+        profiles_sample_rate=1.0,
+    )
+
+# Setup Google Cloud Logging
+APP_ENV = os.getenv("APP_ENV", "local")
+if APP_ENV != "local":
+    try:
+        client = cloud_logging.Client()
+        client.setup_logging()
+    except Exception as e:
+        print(f"Failed to setup Cloud Logging: {e}")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s:%(levelname)s:%(message)s")
 logger = logging.getLogger(__name__)
@@ -14,7 +36,6 @@ logger = logging.getLogger(__name__)
 MODEL_PATH = Path(os.getenv("MODEL_PATH", "models/model.pkl"))
 GCS_MODEL_URI = os.getenv("GCS_MODEL_URI")  # e.g. gs://pso-mlops-dvc-sandy/models/model.pkl
 MODEL_VERSION = os.getenv("MODEL_VERSION", "dev")
-APP_ENV = os.getenv("APP_ENV", "local")
 
 state = {"model": None}
 
@@ -70,6 +91,30 @@ async def read_root():
         "env": APP_ENV,
         "model_loaded": state["model"] is not None,
     }
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start_time = time.time()
+    response = await call_next(request)
+    duration = time.time() - start_time
+    
+    # Log only for /predict endpoint to avoid noise
+    if request.url.path == "/predict":
+        logger.info(
+            "Prediction request",
+            extra={
+                "json_fields": {
+                    "path": request.url.path,
+                    "method": request.method,
+                    "duration_ms": duration * 1000,
+                    "status_code": response.status_code,
+                    "model_version": MODEL_VERSION,
+                    "env": APP_ENV
+                }
+            }
+        )
+    return response
 
 
 @app.post("/predict")
