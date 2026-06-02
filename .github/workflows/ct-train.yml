@@ -169,7 +169,12 @@ jobs:
       - run: pip install "dvc[gs]"
       - run: pip install -r requirements.txt
       - run: dvc pull
-      - run: python scripts/promote_model.py ${{ needs.train.outputs.run_id }} || true
+            - run: |
+          python scripts/promote_model.py ${{ needs.train.outputs.run_id }} || python -c "
+          import json
+          with open('promote_decision.json', 'w') as f:
+              json.dump({'decision': 'KEEP_STAGING', 'accuracy_delta': 0, 'p_value': 1.0, 'challenger_accuracy': 0, 'champion_accuracy': 0, 'run_id': '${{ needs.train.outputs.run_id }}'}, f)
+          "
       - name: Get decision
         id: get-decision
         run: |
