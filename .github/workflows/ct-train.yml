@@ -49,7 +49,7 @@ jobs:
         with:
           python-version: '3.11'
       - run: pip install "dvc[gs]"
-      - run: dvc pull
+      - run: dvc pull --force
       - run: |
           echo "## Data Summary" >> $GITHUB_STEP_SUMMARY
           echo "- train.csv rows: $(wc -l < data/train.csv)" >> $GITHUB_STEP_SUMMARY
@@ -71,7 +71,7 @@ jobs:
           python-version: '3.11'
       - run: pip install "dvc[gs]"
       - run: pip install -r requirements.txt
-      - run: dvc pull
+      - run: dvc pull --force
       - run: python ml/validate.py data/train.csv
       - run: python ml/validate.py data/test.csv --no-target
       - name: Create issue on failure
@@ -102,7 +102,7 @@ jobs:
           python-version: '3.11'
       - run: pip install "dvc[gs]"
       - run: pip install -r requirements.txt
-      - run: dvc pull
+      - run: dvc pull --force
       - run: python main.py
       - name: Get MLflow run ID
         id: get-run-id
@@ -168,7 +168,7 @@ jobs:
           python-version: '3.11'
       - run: pip install "dvc[gs]"
       - run: pip install -r requirements.txt
-      - run: dvc pull
+      - run: dvc pull --force
       - run: |
           python scripts/promote_model.py ${{ needs.train.outputs.run_id }} || python -c "
           import json
@@ -234,7 +234,7 @@ jobs:
           python-version: '3.11'
       - run: pip install "dvc[gs]"
       - run: pip install -r requirements.txt
-      - run: dvc pull
+      - run: dvc pull --force
       - run: python main.py
       - run: dvc add models/model.pkl
       - run: dvc push
