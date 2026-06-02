@@ -4,6 +4,68 @@ import { useState } from "react";
 import Link from "next/link";
 import { postPredict, type InputData, type PredictResponse } from "@/lib/api";
 
+type Option = { label: string; value: string | number };
+
+interface FieldDef {
+  name: keyof InputData;
+  label: string;
+  hint?: string;
+  type: "number" | "select";
+  step?: string;
+  options?: Option[];
+}
+
+const FIELDS: FieldDef[] = [
+  {
+    name: "Gender",
+    label: "Gender",
+    type: "select",
+    options: [
+      { label: "Female", value: "Female" },
+      { label: "Male", value: "Male" },
+    ],
+  },
+  { name: "Age", label: "Age", type: "number", step: "1" },
+  {
+    name: "HasDrivingLicense",
+    label: "Driving license",
+    type: "select",
+    options: [
+      { label: "Yes", value: 1 },
+      { label: "No", value: 0 },
+    ],
+  },
+  { name: "RegionID", label: "Region ID", type: "number", step: "any" },
+  {
+    name: "Switch",
+    label: "Previously switched",
+    hint: "(1 = yes, 0 = no, -1 = unknown)",
+    type: "select",
+    options: [
+      { label: "No (0)", value: 0 },
+      { label: "Yes (1)", value: 1 },
+      { label: "Unknown (-1)", value: -1 },
+    ],
+  },
+  {
+    name: "PastAccident",
+    label: "Past accident",
+    type: "select",
+    options: [
+      { label: "Yes", value: "Yes" },
+      { label: "No", value: "No" },
+      { label: "Unknown", value: "Unknown" },
+    ],
+  },
+  {
+    name: "AnnualPremium",
+    label: "Annual premium",
+    hint: "(currency amount)",
+    type: "number",
+    step: "any",
+  },
+];
+
 const DEFAULTS: InputData = {
   Gender: "Female",
   Age: 46,
@@ -14,7 +76,7 @@ const DEFAULTS: InputData = {
   AnnualPremium: 2305.4,
 };
 
-const NUMERIC_FIELDS: (keyof InputData)[] = [
+const NUMERIC: (keyof InputData)[] = [
   "Age",
   "HasDrivingLicense",
   "RegionID",
@@ -28,10 +90,10 @@ export default function PredictPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  function update(field: keyof InputData, value: string) {
+  function update(name: keyof InputData, raw: string) {
     setForm((prev) => ({
       ...prev,
-      [field]: NUMERIC_FIELDS.includes(field) ? Number(value) : value,
+      [name]: NUMERIC.includes(name) ? Number(raw) : raw,
     }));
   }
 
@@ -49,45 +111,94 @@ export default function PredictPage() {
     }
   }
 
+  function reset() {
+    setForm(DEFAULTS);
+    setResult(null);
+    setError(null);
+  }
+
+  const willBuy = result?.predicted_class === 1;
+
   return (
     <main>
-      <h1>Predict</h1>
-      <form onSubmit={onSubmit}>
-        {(Object.keys(DEFAULTS) as (keyof InputData)[]).map((field) => (
-          <div key={field} style={{ marginBottom: "0.75rem" }}>
-            <label style={{ display: "block", fontWeight: 600 }}>
-              {field}
-            </label>
-            <input
-              value={String(form[field])}
-              onChange={(e) => update(field, e.target.value)}
-              type={NUMERIC_FIELDS.includes(field) ? "number" : "text"}
-              step="any"
-              style={{ width: "100%", padding: "0.4rem" }}
-            />
+      <div style={{ marginBottom: 24 }}>
+        <h1 style={{ margin: "0 0 6px", fontSize: 28 }}>Make a prediction</h1>
+        <p className="muted" style={{ margin: 0 }}>
+          Fill in the customer attributes and the model will estimate whether
+          they are likely to buy vehicle insurance.
+        </p>
+      </div>
+
+      <form className="card" onSubmit={onSubmit}>
+        <div className="form-grid">
+          {FIELDS.map((f) => (
+            <div className="field" key={f.name}>
+              <label htmlFor={f.name}>
+                {f.label}{" "}
+                {f.hint && <span className="hint">{f.hint}</span>}
+              </label>
+              {f.type === "select" ? (
+                <select
+                  id={f.name}
+                  value={String(form[f.name])}
+                  onChange={(e) => update(f.name, e.target.value)}
+                >
+                  {f.options!.map((o) => (
+                    <option key={String(o.value)} value={String(o.value)}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  id={f.name}
+                  type="number"
+                  step={f.step}
+                  value={String(form[f.name])}
+                  onChange={(e) => update(f.name, e.target.value)}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="form-actions">
+          <button type="submit" className="btn btn-primary" disabled={loading}>
+            {loading ? "Predicting…" : "Predict"}
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={reset}
+            disabled={loading}
+          >
+            Reset
+          </button>
+        </div>
+
+        {result && (
+          <div className={`result ${willBuy ? "positive" : "negative"}`}>
+            <p className="muted" style={{ margin: 0 }}>
+              Prediction
+            </p>
+            <p className="big">
+              {willBuy
+                ? "✅ Likely to buy insurance"
+                : "➖ Unlikely to buy insurance"}
+            </p>
+            <p className="muted mono" style={{ margin: 0 }}>
+              class={result.predicted_class} · model v{result.model_version}
+            </p>
           </div>
-        ))}
-        <button type="submit" disabled={loading} style={{ padding: "0.5rem 1rem" }}>
-          {loading ? "Predicting…" : "Predict"}
-        </button>
+        )}
+
+        {error && <div className="alert">⚠️ {error}</div>}
       </form>
 
-      {result && (
-        <div style={{ marginTop: "1.5rem" }}>
-          <h2>Result</h2>
-          <p>
-            Predicted class: <strong>{result.predicted_class}</strong>
-          </p>
-          <p>Model version: {result.model_version}</p>
-        </div>
-      )}
-
-      {error && (
-        <p style={{ color: "crimson", marginTop: "1.5rem" }}>Error: {error}</p>
-      )}
-
-      <p style={{ marginTop: "2rem" }}>
-        <Link href="/">← Back</Link>
+      <p style={{ marginTop: 22 }}>
+        <Link href="/" className="muted">
+          ← Back to home
+        </Link>
       </p>
     </main>
   );

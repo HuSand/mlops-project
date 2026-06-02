@@ -16,6 +16,21 @@ export interface PredictResponse {
   model_version: string;
 }
 
+export interface HealthResponse {
+  health_check: string;
+  model_version: string;
+  env: string;
+  model_loaded: boolean;
+}
+
+export async function getHealth(): Promise<HealthResponse> {
+  const res = await fetch(`${API_BASE}/`, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`Health check failed (${res.status})`);
+  }
+  return res.json();
+}
+
 export async function postPredict(input: InputData): Promise<PredictResponse> {
   const res = await fetch(`${API_BASE}/predict`, {
     method: "POST",
@@ -23,7 +38,12 @@ export async function postPredict(input: InputData): Promise<PredictResponse> {
     body: JSON.stringify(input),
   });
   if (!res.ok) {
-    const detail = await res.text();
+    let detail = await res.text();
+    try {
+      detail = JSON.parse(detail).detail ?? detail;
+    } catch {
+      /* keep raw text */
+    }
     throw new Error(`Prediction failed (${res.status}): ${detail}`);
   }
   return res.json();

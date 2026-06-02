@@ -6,6 +6,12 @@ on:
     - cron: '0 23 * * *'
   workflow_dispatch:
 
+permissions:
+  contents: write
+  issues: write
+  actions: write
+  id-token: write
+
 jobs:
   run-evidently-report:
     name: Run Evidently drift report and notify
@@ -27,7 +33,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install evidently pandas pyarrow google-cloud-bigquery google-cloud-storage dvc dvc-gs
+          pip install evidently==0.7.21 pandas pyarrow google-cloud-bigquery google-cloud-storage dvc dvc-gs
 
       # =============================================
       # STEP 2: Authenticate to GCP
@@ -35,14 +41,15 @@ jobs:
       - name: Authenticate to GCP
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          workload_identity_provider: 'projects/721834211942/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+          service_account: 'mlops-ct-pipeline@project-d50e88c7-b681-48d4-b1b.iam.gserviceaccount.com'
 
       - name: Setup gcloud CLI
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Verify GCP access
         run: |
-          gsutil ls gs://${{ secrets.GCS_BUCKET }} || echo "Warning: Cannot access bucket"
+          gsutil ls gs://dvc-mlops-ct-pipeline || echo "Warning: Cannot access bucket"
 
       # =============================================
       # STEP 3: Fetch production data dari BigQuery
@@ -59,7 +66,8 @@ jobs:
       # =============================================
       - name: Pull reference training data
         run: |
-          dvc pull data/train.csv --remote gcsremote || echo "DVC pull failed, using local fallback"
+          dvc pull data --remote gcsremote
+          mkdir -p monitoring/data
           cp data/train.csv monitoring/data/reference_data.csv
 
       # =============================================
