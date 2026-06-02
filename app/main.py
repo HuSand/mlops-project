@@ -4,6 +4,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app import config
 from app import model as model_mod
@@ -35,6 +36,13 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Insurance Cross-Sell Predictor", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],          # nanti bisa dipersempit ke domain Vercel-mu
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.include_router(router)
 
 
