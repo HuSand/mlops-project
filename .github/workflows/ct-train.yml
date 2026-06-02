@@ -169,7 +169,7 @@ jobs:
       - run: pip install "dvc[gs]"
       - run: pip install -r requirements.txt
       - run: dvc pull
-            - run: |
+      - run: |
           python scripts/promote_model.py ${{ needs.train.outputs.run_id }} || python -c "
           import json
           with open('promote_decision.json', 'w') as f:
