@@ -19,4 +19,5 @@ async def predict(input_data: InputData):
     df = pd.DataFrame([payload])
     pred = int(model.predict(df)[0])
     bq_logger.log_prediction(payload, pred)
+    bq_logger.notify_discord(payload, pred) 
     return {"predicted_class": pred, "model_version": config.MODEL_VERSION}
