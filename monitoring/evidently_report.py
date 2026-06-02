@@ -1,7 +1,6 @@
 """
-Evidently AI Drift Report Generator
-Dijalankan oleh monitor.yml setiap hari.
-Membandingkan reference data (training) vs current data (production).
+Evidently AI Drift Report Generator - Final Aligned Version
+Menyelaraskan nama kolom antara feature_0...9 (Reference) dan nama asli dari log BigQuery.
 """
 
 import argparse
@@ -16,76 +15,88 @@ except ImportError:
 
 
 def run_drift_report(reference_path: str, current_path: str, output_html: str, output_json: str):
-    """Generate Evidently drift report dan simpan hasilnya."""
+    """Generate Evidently drift report dengan pemetaan kolom yang disinkronkan."""
 
     # Load data
     reference = pd.read_csv(reference_path)
     current = pd.read_csv(current_path)
 
-    print(f"Reference data: {len(reference)} rows")
-    print(f"Current data:   {len(current)} rows")
+    # 1. DEFINISI PEMETAAN (Mapping) Berdasarkan Cross-Check
+    # Reference: feature_0 s/d feature_9
+    # Current: Gender, Age, HasDrivingLicense, RegionID, Switch, PastAccident, AnnualPremium
+    mapping = {
+        "feature_0": "Gender",
+        "feature_1": "Age",
+        "feature_2": "HasDrivingLicense",
+        "feature_3": "RegionID",
+        "feature_4": "Switch",
+        "feature_5": "PastAccident",
+        "feature_6": "AnnualPremium",
+        # Jika ada feature_7, 8, 9, silakan tambahkan di sini jika sudah ada di log BQ
+        "target": "prediction" 
+    }
 
-    # LOGIKA PERBAIKAN: Cek ketersediaan kolom 'target'
-    metrics_to_run = [DataDriftPreset(), DataQualityPreset()]
+    print("--- SCHEMA CROSS-CHECK ---")
+    print(f"Reference Raw Columns: {list(reference.columns)}")
+    print(f"Current Raw Columns:   {list(current.columns)}")
+
+    # Ganti nama kolom di Reference agar match dengan Current
+    reference = reference.rename(columns=mapping)
+
+    # 2. Ambil irisan kolom yang ada di keduanya
+    common_cols = [c for c in reference.columns if c in current.columns]
     
-    if 'target' in reference.columns and 'target' in current.columns:
-        print("Kolom 'target' ditemukan di kedua dataset. Menambahkan TargetDriftPreset.")
+    # Filter kolom metadata yang tidak perlu dihitung drift-nya
+    exclude_from_drift = ['model_version', 'timestamp']
+    analysis_cols = [c for c in common_cols if c not in exclude_from_drift]
+
+    if not analysis_cols:
+        print("ERROR: Tidak ada kolom fitur yang cocok untuk dibandingkan!")
+        return
+
+    print(f"Aligned Columns for Analysis: {analysis_cols}")
+
+    # 3. Jalankan Report
+    metrics_to_run = [DataDriftPreset(), DataQualityPreset()]
+    if "prediction" in analysis_cols:
+        print("Adding TargetDriftPreset for 'prediction' column.")
         metrics_to_run.append(TargetDriftPreset())
-    else:
-        print("Kolom 'target' tidak lengkap (hanya ada di salah satu dataset atau tidak ada keduanya).")
-        print("Menghapus kolom 'target' dari analisis untuk menghindari error.")
-        if 'target' in reference.columns:
-            reference = reference.drop(columns=['target'])
-        if 'target' in current.columns:
-            current = current.drop(columns=['target'])
 
-    # Jalankan Evidently report dengan preset yang tersedia
     report = Report(metrics=metrics_to_run)
-    report.run(reference_data=reference, current_data=current)
+    report.run(reference_data=reference[analysis_cols], current_data=current[analysis_cols])
 
-    # Simpan report HTML (untuk upload ke GCS)
+    # Simpan report HTML
     report.save_html(output_html)
     print(f"HTML report saved: {output_html}")
 
-    # Extract metrics penting untuk threshold check
+    # 4. Extract Metrics untuk JSON
     result = report.as_dict()
     drift_metrics = {
         "drift_share": 0.0,
         "number_of_drifted_columns": 0,
-        "number_of_columns": 0,
+        "number_of_columns": len([c for c in analysis_cols if c != 'prediction']),
         "dataset_drift": False,
         "drifted_features": [],
     }
 
-    # Cari hasil dari DataDriftPreset di dalam output dictionary
-    # Evidently versi baru dan lama punya struktur as_dict yang sedikit berbeda
     for metric in result.get("metrics", []):
         res = metric.get("result", {})
+        if "dataset_drift" in res:
+            drift_metrics["drift_share"] = res.get("share_of_drifted_columns", 0)
+            drift_metrics["number_of_drifted_columns"] = res.get("number_of_drifted_columns", 0)
+            drift_metrics["dataset_drift"] = res.get("dataset_drift", False)
 
-        # Extract data drift info
-        if "dataset_drift" in res and "share_of_drifted_columns" in res:
-            drift_metrics["drift_share"] = res["share_of_drifted_columns"]
-            drift_metrics["number_of_drifted_columns"] = res["number_of_drifted_columns"]
-            drift_metrics["number_of_columns"] = res["number_of_columns"]
-            drift_metrics["dataset_drift"] = res["dataset_drift"]
-
-            # Detail per fitur
             for col_name, col_data in res.get("drift_by_columns", {}).items():
                 if col_data.get("drift_detected", False):
                     drift_metrics["drifted_features"].append({
                         "feature": col_name,
                         "drift_score": col_data.get("drift_score", 0),
-                        "stattest": col_data.get("stattest_name", "unknown"),
                     })
 
-    # Simpan metrics sebagai JSON (untuk threshold check di workflow)
     with open(output_json, "w") as f:
         json.dump(drift_metrics, f, indent=2)
 
     print(f"Metrics JSON saved: {output_json}")
-    print(f"Drift share: {drift_metrics['drift_share']:.2f}")
-    print(f"Drifted features: {drift_metrics['number_of_drifted_columns']}/{drift_metrics['number_of_columns']}")
-
     return drift_metrics
 
 

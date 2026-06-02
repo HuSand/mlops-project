@@ -4,6 +4,7 @@ Digunakan oleh monitor.yml untuk mendapatkan data 'current' untuk drift detectio
 """
 
 import argparse
+import json
 import pandas as pd
 from google.cloud import bigquery
 
@@ -15,11 +16,13 @@ def fetch_data(project_id: str, output_path: str, days: int = 1):
     """
     client = bigquery.Client(project=project_id)
 
-    # Query untuk mengambil logs terbaru
-    # Sesuaikan nama kolom dengan schema di BigQuery kalian
+    # Query untuk mengambil logs terbaru termasuk kolom prediction
     query = f"""
         SELECT 
-            input_payload
+            input_payload,
+            prediction,
+            model_version,
+            timestamp
         FROM 
             `{project_id}.mlops.prediction_logs`
         WHERE 
@@ -32,22 +35,24 @@ def fetch_data(project_id: str, output_path: str, days: int = 1):
 
     if results.empty:
         print("No production data found in the last 24 hours.")
-        # Buat dummy data agar pipeline tidak crash (opsional, tergantung kebijakan)
-        # Atau raise error
         return
 
-    # input_payload biasanya disimpan sebagai string JSON di BQ
-    # Kita perlu unpack menjadi kolom-kolom dataframe
-    import json
-    
-    # Unpack JSON strings
+    # Unpack JSON strings dari input_payload dan gabungkan dengan kolom lainnya
     rows = []
     for _, row in results.iterrows():
         payload = row['input_payload']
+        # Parse payload
         if isinstance(payload, str):
-            rows.append(json.loads(payload))
+            data_row = json.loads(payload)
         else:
-            rows.append(payload)
+            data_row = payload.copy() if payload else {}
+            
+        # Tambahkan metadata penting untuk monitoring
+        data_row['prediction'] = row['prediction']
+        data_row['model_version'] = row['model_version']
+        data_row['timestamp'] = str(row['timestamp'])
+        
+        rows.append(data_row)
             
     df = pd.DataFrame(rows)
 
