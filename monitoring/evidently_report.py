@@ -25,13 +25,22 @@ def run_drift_report(reference_path: str, current_path: str, output_html: str, o
     print(f"Reference data: {len(reference)} rows")
     print(f"Current data:   {len(current)} rows")
 
-    # Jalankan Evidently report dengan 3 preset yang dibutuhkan
-    report = Report(metrics=[
-        DataDriftPreset(),       # deteksi pergeseran distribusi fitur
-        TargetDriftPreset(),     # deteksi pergeseran distribusi prediksi
-        DataQualityPreset(),     # deteksi data kotor (missing, duplikat)
-    ])
+    # LOGIKA PERBAIKAN: Cek ketersediaan kolom 'target'
+    metrics_to_run = [DataDriftPreset(), DataQualityPreset()]
+    
+    if 'target' in reference.columns and 'target' in current.columns:
+        print("Kolom 'target' ditemukan di kedua dataset. Menambahkan TargetDriftPreset.")
+        metrics_to_run.append(TargetDriftPreset())
+    else:
+        print("Kolom 'target' tidak lengkap (hanya ada di salah satu dataset atau tidak ada keduanya).")
+        print("Menghapus kolom 'target' dari analisis untuk menghindari error.")
+        if 'target' in reference.columns:
+            reference = reference.drop(columns=['target'])
+        if 'target' in current.columns:
+            current = current.drop(columns=['target'])
 
+    # Jalankan Evidently report dengan preset yang tersedia
+    report = Report(metrics=metrics_to_run)
     report.run(reference_data=reference, current_data=current)
 
     # Simpan report HTML (untuk upload ke GCS)
@@ -48,6 +57,8 @@ def run_drift_report(reference_path: str, current_path: str, output_html: str, o
         "drifted_features": [],
     }
 
+    # Cari hasil dari DataDriftPreset di dalam output dictionary
+    # Evidently versi baru dan lama punya struktur as_dict yang sedikit berbeda
     for metric in result.get("metrics", []):
         res = metric.get("result", {})
 
