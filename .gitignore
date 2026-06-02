@@ -166,3 +166,7 @@ cython_debug/
 models/model.pkl
 
 mlruns/
+
+# Frontend source lib/ (override the Python lib/ ignore above)
+!frontend/lib/
+!frontend/lib/**
