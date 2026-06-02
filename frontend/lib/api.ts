@@ -1,5 +1,5 @@
 const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:80";
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "https://insurance-api-dev-6n767ucvla-et.a.run.app";
 
 export interface InputData {
   Gender: string;
