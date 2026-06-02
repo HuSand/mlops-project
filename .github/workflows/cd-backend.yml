@@ -8,14 +8,14 @@ on:
         required: false
         default: ""
   push:
-    branches: [dev]
+    branches: [dev, prod]
     paths:
       - 'app/**'
       - 'dockerfile'
       - 'requirements-serve.txt'
       - '.github/workflows/cd-backend.yml'
   pull_request:
-    branches: [dev]
+    branches: [dev, prod]
     paths:
       - 'app/**'
       - 'dockerfile'
@@ -29,7 +29,7 @@ permissions:
 env:
   REGION: asia-southeast2
   AR_REPO: mlops-images
-  SERVICE: insurance-api
+  IMAGE_NAME: insurance-api
 
 jobs:
   # On PRs: prove the container builds. No secrets, never blocks the PR.
@@ -42,14 +42,28 @@ jobs:
       - name: Docker build
         run: docker build -f dockerfile -t insurance-api-ci .
 
-  # On workflow_dispatch (called by CT) or push to dev: build, push, deploy.
+  # On workflow_dispatch (called by CT) or push to dev/prod: build, push, deploy.
+  # The target Cloud Run service and APP_ENV are derived from the branch:
+  #   prod branch -> service "insurance-api"     (APP_ENV=prod, environment prod)
+  #   otherwise   -> service "insurance-api-dev" (APP_ENV=dev,  environment dev)
   deploy:
     name: Build, push and deploy to Cloud Run
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    environment: prod
+    environment: ${{ github.ref_name == 'prod' && 'prod' || 'dev' }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Resolve target environment
+        id: target
+        run: |
+          if [ "${{ github.ref_name }}" = "prod" ]; then
+            echo "service=${IMAGE_NAME}" >> "$GITHUB_OUTPUT"
+            echo "app_env=prod" >> "$GITHUB_OUTPUT"
+          else
+            echo "service=${IMAGE_NAME}-dev" >> "$GITHUB_OUTPUT"
+            echo "app_env=dev" >> "$GITHUB_OUTPUT"
+          fi
 
       # Secrets cannot be evaluated in `if:` directly, so map to env and emit
       # an output. If GCP is not configured yet (P4 pending), skip all GCP
@@ -84,7 +98,7 @@ jobs:
       - name: Build and push image
         if: steps.guard.outputs.configured == 'true'
         env:
-          IMAGE: ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/${{ env.SERVICE }}
+          IMAGE: ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/${{ env.IMAGE_NAME }}
         run: |
           docker build -f dockerfile -t "$IMAGE:${{ github.sha }}" -t "$IMAGE:latest" .
           docker push "$IMAGE:${{ github.sha }}"
@@ -93,7 +107,9 @@ jobs:
       - name: Deploy to Cloud Run
         if: steps.guard.outputs.configured == 'true'
         env:
-          IMAGE: ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/${{ env.SERVICE }}
+          IMAGE: ${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/${{ env.IMAGE_NAME }}
+          SERVICE: ${{ steps.target.outputs.service }}
+          APP_ENV: ${{ steps.target.outputs.app_env }}
           MODEL_VERSION: ${{ github.event.inputs.model_version || github.run_number }}
         run: |
           gcloud run deploy "$SERVICE" \
@@ -103,4 +119,4 @@ jobs:
             --allow-unauthenticated \
             --port 80 \
             --service-account "${{ secrets.RUNTIME_SA }}" \
-            --set-env-vars "APP_ENV=prod,MODEL_VERSION=${MODEL_VERSION},GCS_MODEL_URI=${{ secrets.GCS_MODEL_URI }},ENABLE_BQ_LOGGING=true,BQ_PROJECT=${{ secrets.GCP_PROJECT_ID }},BQ_DATASET=mlops,BQ_TABLE=prediction_logs"
+            --set-env-vars "APP_ENV=${APP_ENV},MODEL_VERSION=${MODEL_VERSION},GCS_MODEL_URI=${{ secrets.GCS_MODEL_URI }},ENABLE_BQ_LOGGING=true,BQ_PROJECT=${{ secrets.GCP_PROJECT_ID }},BQ_DATASET=mlops,BQ_TABLE=prediction_logs"
