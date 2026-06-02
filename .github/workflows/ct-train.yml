@@ -19,7 +19,6 @@ permissions:
 
 env:
   MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
-  MLFLOW_TRACKING_TOKEN: ${{ secrets.MLFLOW_TRACKING_TOKEN }}
 
 jobs:
   # JOB 1: Auth GCP
@@ -71,6 +70,7 @@ jobs:
         with:
           python-version: '3.11'
       - run: pip install -r requirements.txt
+      - run: pip install "dvc[gs]"
       - run: dvc pull
       - run: python ml/validate.py data/train.csv
       - run: python ml/validate.py data/test.csv --no-target
@@ -243,7 +243,8 @@ jobs:
   # JOB 9: GitHub Release
   release:
     name: Create GitHub Release
-    needs: [train, artifact-versioning]
+    needs: [train, artifact-versioning, evaluate]
+    if: needs.evaluate.outputs.decision == 'PROMOTE'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
