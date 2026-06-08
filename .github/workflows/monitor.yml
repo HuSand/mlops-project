@@ -2,7 +2,6 @@ name: Monitor - Drift Detection
 
 on:
   schedule:
-    # Daily 06:00 WIB = 23:00 UTC previous day
     - cron: '0 23 * * *'
   workflow_dispatch:
 
@@ -39,7 +38,7 @@ jobs:
 
       - name: Fetch production prediction logs from BigQuery
         run: |
-          pip install pandas google-cloud-bigquery pyarrow db-dtypes
+          python -m pip install pandas google-cloud-bigquery pyarrow db-dtypes
           mkdir -p monitoring/data
           python monitoring/fetch_production_data.py \
             --project-id ${{ secrets.GCP_PROJECT_ID }} \
@@ -47,7 +46,7 @@ jobs:
 
       - name: Pull reference training data (DVC)
         run: |
-          pip install "dvc[gs]"
+          python -m pip install "dvc[gs]"
           dvc pull data
           mkdir -p monitoring/data
           cp data/train.csv monitoring/data/reference_data.csv
@@ -67,8 +66,8 @@ jobs:
     needs: fetch-data
     runs-on: ubuntu-latest
     outputs:
-      DRIFT_DETECTED: ${{ steps.check_threshold.outputs.DRIFT_DETECTED }}
-      DRIFT_SCORE: ${{ steps.check_threshold.outputs.DRIFT_SCORE }}
+      DRIFT_DETECTED: ${{ steps.run_report.outputs.DRIFT_DETECTED }}
+      DRIFT_SCORE: ${{ steps.run_report.outputs.DRIFT_SCORE }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -84,13 +83,17 @@ jobs:
           name: monitoring-datasets
           path: monitoring/data/
 
-      - name: Install Dependencies and Run Report
+      - name: Install and Run Report
         id: run_report
         run: |
-          # Use python -m pip to guarantee we install to the active python environment
+          # 1. Paksa install versi stabil dan pastikan di environment yang benar
           python -m pip install --upgrade pip
-          python -m pip install "evidently>=0.4.0" scikit-learn pandas
+          python -m pip install "evidently==0.4.33" scikit-learn pandas
           
+          # 2. Debug: pastikan module terbaca
+          python -c "import evidently; print(f'Evidently Version: {evidently.__version__}')"
+          
+          # 3. Jalankan script
           mkdir -p monitoring/reports
           python monitoring/evidently_report.py \
             --reference monitoring/data/reference_data.csv \
@@ -98,12 +101,8 @@ jobs:
             --output-html monitoring/reports/drift_report.html \
             --output-json monitoring/reports/drift_metrics.json
 
-          DRIFT_SCORE=$(python -c "
-          import json
-          with open('monitoring/reports/drift_metrics.json') as f:
-              data = json.load(f)
-          print(data.get('drift_share', 0))
-          ")
+          # 4. Parsing hasil JSON
+          DRIFT_SCORE=$(python -c "import json; print(json.load(open('monitoring/reports/drift_metrics.json')).get('drift_share', 0))")
           echo "Drift score: $DRIFT_SCORE"
           echo "DRIFT_SCORE=$DRIFT_SCORE" >> $GITHUB_OUTPUT
 
@@ -157,7 +156,7 @@ jobs:
 
       - name: Write drift metrics to BigQuery
         run: |
-          pip install google-cloud-bigquery
+          python -m pip install google-cloud-bigquery
           python monitoring/write_metrics_to_bq.py \
             --project-id ${{ secrets.GCP_PROJECT_ID }} \
             --metrics-file monitoring/reports/drift_metrics.json
