@@ -41,22 +41,34 @@ def run_drift_report(reference_path: str, current_path: str, output_html: str, o
         sys.exit(1)
 
     # 2. Sinkronisasi Nama Kolom
-    # Karena CT sudah menggunakan nama asli (Gender, Age, dll), 
-    # kita tidak perlu lagi me-rename feature_0...9.
+    # Data Reference (Training) kita sekarang punya nama: Gender, Age, dll.
+    # Data Current (Production) dari BigQuery ternyata punya nama: feature_0, feature_1, dll.
+    
+    mapping_for_current = {
+        "feature_0": "Gender",
+        "feature_1": "Age",
+        "feature_2": "HasDrivingLicense",
+        "feature_3": "RegionID",
+        "feature_4": "Switch",
+        "feature_5": "PastAccident",
+        "feature_6": "AnnualPremium",
+        "prediction": "prediction"
+    }
     
     print("--- SCHEMA CROSS-CHECK ---")
     print(f"Reference Columns: {list(reference.columns)}")
-    print(f"Current Columns:   {list(current.columns)}")
+    print(f"Current Raw Columns: {list(current.columns)}")
+    
+    # Kita ubah nama kolom di data Current agar match dengan Reference
+    current = current.rename(columns=mapping_for_current)
     
     # 3. Definisikan Column Mapping
-    # Gunakan nama kolom asli sesuai hasil CT terbaru
     column_mapping = ColumnMapping()
     column_mapping.target = 'prediction' 
     column_mapping.numerical_features = ['Age', 'AnnualPremium', 'RegionID']
     column_mapping.categorical_features = ['Gender', 'HasDrivingLicense', 'Switch', 'PastAccident']
 
     # Ambil hanya kolom yang ada di kedua data (irisan)
-    # Pastikan 'prediction' ada di current (dari BQ) dan reference (hasil training)
     common_cols = [c for c in reference.columns if c in current.columns]
     
     # Pastikan ada data untuk dianalisis
