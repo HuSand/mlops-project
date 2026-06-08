@@ -21,23 +21,24 @@ class Trainer:
             return yaml.safe_load(config_file)
         
     def create_pipeline(self):
-        # Semua kolom feature_0 sampai feature_9 adalah numerik
-        numeric_cols = [f'feature_{i}' for i in range(10)]
-        
+        numeric_cols = ['Age', 'HasDrivingLicense', 'RegionID', 'Switch', 'AnnualPremium']
+        categorical_cols = ['Gender', 'PastAccident']
+
         preprocessor = ColumnTransformer(transformers=[
             ('standardize', StandardScaler(), numeric_cols),
+            ('encode', OneHotEncoder(handle_unknown='ignore', sparse_output=False), categorical_cols),
         ])
-        
+
         smote = SMOTE(sampling_strategy=1.0)
-        
+
         model_map = {
             'RandomForestClassifier': RandomForestClassifier,
             'DecisionTreeClassifier': DecisionTreeClassifier,
             'GradientBoostingClassifier': GradientBoostingClassifier
         }
-
         model_class = model_map[self.model_name]
         model = model_class(**self.model_params)
+
         pipeline = Pipeline([
             ('preprocessor', preprocessor),
             ('smote', smote),

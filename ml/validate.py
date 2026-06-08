@@ -8,29 +8,23 @@ from pandera.pandas import Column, DataFrameSchema, Check
 
 
 def build_schema(include_target: bool = True) -> DataFrameSchema:
-    feature_columns = {
-        f"feature_{i}": Column(float, nullable=False)
-        for i in range(10)
+    schema_cols = {
+        "Gender": Column(str, nullable=True),
+        "Age": Column(float, nullable=True),
+        "HasDrivingLicense": Column(float, nullable=True),
+        "RegionID": Column(float, nullable=True),
+        "Switch": Column(float, nullable=True),
+        "PastAccident": Column(str, nullable=True),
+        "AnnualPremium": Column(float, nullable=True),
     }
+    if include_target:
+        schema_cols["target"] = Column(
+            pa.Int,
+            checks=[Check.ge(0), Check.le(1)],
+            nullable=False
+        )
 
-    target_column = {
-    "target": Column(
-        float,
-        nullable=False,
-        checks=[Check.ge(0), Check.le(1)],
-    )
-}
-
-    schema = DataFrameSchema(
-        {
-            **feature_columns,
-            **(target_column if include_target else {}),
-        },
-        strict=True if include_target else False,
-        coerce=True,
-    )
-    return schema
-
+    return DataFrameSchema(schema_cols, strict=False)
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -70,16 +64,9 @@ def main() -> int:
         print(f"ERROR: Failed to read CSV: {csv_path}\n{exc}")
         return 1
 
-    # Konversi semua kolom ke numeric dulu sebelum validasi
-    for col in df.columns:
-        df[col] = pd.to_numeric(df[col], errors='coerce')
-
-    # Drop baris yang tidak bisa dikonversi
-    df = df.dropna().reset_index(drop=True)
-
-    # Pastikan target bertipe int
-    if 'target' in df.columns:
-        df['target'] = df['target'].astype(int)
+    # Pastikan target bertipe int kalau ada
+    if 'target' in df.columns and not args.no_target:
+        df['target'] = pd.to_numeric(df['target'], errors='coerce').astype('Int64')
 
     include_target = not args.no_target
     schema = build_schema(include_target=include_target)
