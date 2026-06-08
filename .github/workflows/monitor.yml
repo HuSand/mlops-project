@@ -87,8 +87,9 @@ jobs:
       - name: Install Dependencies and Run Report
         id: run_report
         run: |
-          pip install --upgrade pip
-          pip install "evidently>=0.4.0" scikit-learn pandas
+          # Use python -m pip to guarantee we install to the active python environment
+          python -m pip install --upgrade pip
+          python -m pip install "evidently>=0.4.0" scikit-learn pandas
           
           mkdir -p monitoring/reports
           python monitoring/evidently_report.py \

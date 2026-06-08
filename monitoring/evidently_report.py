@@ -40,33 +40,23 @@ def run_drift_report(reference_path: str, current_path: str, output_html: str, o
         print(f"ERROR: Gagal membaca file CSV: {e}")
         sys.exit(1)
 
-    # 2. Sinkronisasi Nama Kolom (MAPPING)
-    # Kita ubah nama kolom di data training (feature_x) agar sama dengan data produksi
-    mapping = {
-        "feature_0": "Gender",
-        "feature_1": "Age",
-        "feature_2": "HasDrivingLicense",
-        "feature_3": "RegionID",
-        "feature_4": "Switch",
-        "feature_5": "PastAccident",
-        "feature_6": "AnnualPremium",
-        "target": "prediction" 
-    }
+    # 2. Sinkronisasi Nama Kolom
+    # Karena CT sudah menggunakan nama asli (Gender, Age, dll), 
+    # kita tidak perlu lagi me-rename feature_0...9.
     
     print("--- SCHEMA CROSS-CHECK ---")
-    print(f"Reference Raw Columns: {list(reference.columns)}")
-    print(f"Current Raw Columns:   {list(current.columns)}")
+    print(f"Reference Columns: {list(reference.columns)}")
+    print(f"Current Columns:   {list(current.columns)}")
     
-    reference = reference.rename(columns=mapping)
-
     # 3. Definisikan Column Mapping
-    # Ini memberi tahu Evidently tipe data tiap kolom agar tidak salah hitung
+    # Gunakan nama kolom asli sesuai hasil CT terbaru
     column_mapping = ColumnMapping()
-    column_mapping.target = 'prediction' # Di CM, kita pantau hasil prediksi model
+    column_mapping.target = 'prediction' 
     column_mapping.numerical_features = ['Age', 'AnnualPremium', 'RegionID']
     column_mapping.categorical_features = ['Gender', 'HasDrivingLicense', 'Switch', 'PastAccident']
 
     # Ambil hanya kolom yang ada di kedua data (irisan)
+    # Pastikan 'prediction' ada di current (dari BQ) dan reference (hasil training)
     common_cols = [c for c in reference.columns if c in current.columns]
     
     # Pastikan ada data untuk dianalisis
