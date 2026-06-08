@@ -238,6 +238,7 @@ jobs:
         with:
           workload_identity_provider: 'projects/721834211942/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
           service_account: 'mlops-ct-pipeline@project-d50e88c7-b681-48d4-b1b.iam.gserviceaccount.com'
+      - uses: google-github-actions/setup-gcloud@v2 
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -250,12 +251,18 @@ jobs:
       - name: Copy model to mlflow-artifacts-mlops
         run: |
           gsutil cp models/model.pkl gs://mlflow-artifacts-mlops/models/model.pkl
-      - run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Commit and Push
+        run: |
           git add models.dvc dvc.lock
-          git commit -m "chore(model): retrain model-v${{ github.run_number }}"
+          git commit -m "chore(model): retrain model-v${{ github.run_number }}" || echo "No changes to commit"
           git push origin ${{ github.ref_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # JOB 9: GitHub Release
   release:
