@@ -2,9 +2,32 @@ import argparse
 import json
 import pandas as pd
 import sys
-from evidently.report import Report
-from evidently.metric_preset import DataDriftPreset, TargetDriftPreset, DataQualityPreset
-from evidently import ColumnMapping
+
+# --- SAFE IMPORT STRATEGY ---
+try:
+    # Versi Modern (0.4.0+)
+    from evidently.report import Report
+    from evidently.metric_preset import DataDriftPreset, TargetDriftPreset, DataQualityPreset
+    from evidently import ColumnMapping
+except ImportError:
+    try:
+        # Versi Menengah
+        from evidently.model_monitoring import Report
+        from evidently.metric_preset import DataDriftPreset, TargetDriftPreset, DataQualityPreset
+        from evidently import ColumnMapping
+    except ImportError:
+        try:
+            # Versi Legacy
+            from evidently.dashboard import Dashboard
+            from evidently.tabs import DataDriftTab, CatTargetDriftTab
+            print("WARNING: Using legacy Evidently structure. Report might look different.")
+            # Mocking modern classes for legacy if needed (advanced)
+            # Untuk sekarang kita stop jika versi terlalu lama
+            raise ImportError("Evidently version is too old. Please use v0.4.0+")
+        except ImportError as e:
+            print(f"ERROR: Cannot find Evidently modules. sys.path: {sys.path}")
+            raise e
+# ----------------------------
 
 def run_drift_report(reference_path: str, current_path: str, output_html: str, output_json: str):
     """Generate Evidently drift report dengan konfigurasi profesional."""
