@@ -34,8 +34,11 @@ def fetch_data(project_id: str, output_path: str, days: int = 1):
     results = query_job.to_dataframe()
 
     if results.empty:
-        print("No production data found in the last 24 hours.")
-        return
+        import sys
+        print(f"ERROR: No production data found in the last {days} day(s).")
+        print("Pastikan aplikasi production (backend) sudah mengirimkan log ke BigQuery.")
+        print("Cek variabel environment ENABLE_BQ_LOGGING=true di production.")
+        sys.exit(1)
 
     # Unpack JSON strings dari input_payload dan gabungkan dengan kolom lainnya
     rows = []
