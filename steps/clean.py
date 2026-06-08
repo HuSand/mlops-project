@@ -4,20 +4,29 @@ from sklearn.impute import SimpleImputer
 
 class Cleaner:
     def __init__(self):
-        self.imputer = SimpleImputer(strategy='mean', missing_values=np.nan)
+        self.num_imputer = SimpleImputer(strategy='mean')
+        self.cat_imputer = SimpleImputer(strategy='most_frequent')
 
     def clean_data(self, data):
         feature_cols = [col for col in data.columns if col != 'target']
+        
+        # Pisahkan kolom numerik dan kategorik
+        num_cols = data[feature_cols].select_dtypes(include=[np.number]).columns.tolist()
+        cat_cols = data[feature_cols].select_dtypes(exclude=[np.number]).columns.tolist()
 
-        # Konversi ke numeric
-        data[feature_cols] = data[feature_cols].apply(pd.to_numeric, errors='coerce')
-        data['target'] = pd.to_numeric(data['target'], errors='coerce')
+        # Impute numerik dengan mean
+        if num_cols:
+            data[num_cols] = self.num_imputer.fit_transform(data[num_cols])
 
-        # Drop baris yang target-nya NaN (tidak bisa di-impute)
-        data = data.dropna(subset=['target'])
-        data['target'] = data['target'].astype(int)
+        # Impute kategorik dengan most_frequent
+        if cat_cols:
+            data[cat_cols] = self.cat_imputer.fit_transform(data[cat_cols])
+
+        # Clean target
+        if 'target' in data.columns:
+            data['target'] = pd.to_numeric(data['target'], errors='coerce')
+            data = data.dropna(subset=['target'])
+            data['target'] = data['target'].astype(int)
 
         data = data.drop_duplicates().reset_index(drop=True)
-        data[feature_cols] = self.imputer.fit_transform(data[feature_cols])
-
         return data

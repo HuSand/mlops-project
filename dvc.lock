@@ -33,8 +33,8 @@ stages:
       size: 15708080
     - path: main.py
       hash: md5
-      md5: b1dc73e48ae7a773041a5c9750c68958
-      size: 4251
+      md5: 92ed289a2b8219acc121ef491a348220
+      size: 4289
     - path: steps/
       hash: md5
       md5: 4a3921c6835231396139685a71df39cf.dir
@@ -55,8 +55,8 @@ stages:
     outs:
     - path: models/model.pkl
       hash: md5
-      md5: 3208de5a4e467749a707a66d264ba96b
-      size: 821860
+      md5: 1754c3f1ecf6225f6cf5e3945cea257c
+      size: 820100
   evaluate:
     cmd: python scripts/evaluate.py
     deps:
@@ -66,8 +66,8 @@ stages:
       size: 3928750
     - path: models/model.pkl
       hash: md5
-      md5: 3208de5a4e467749a707a66d264ba96b
-      size: 821860
+      md5: 1754c3f1ecf6225f6cf5e3945cea257c
+      size: 820100
     - path: scripts/evaluate.py
       hash: md5
       md5: d06dd48df68146e554a02e41d65c557b
@@ -79,5 +79,5 @@ stages:
     outs:
     - path: metrics.json
       hash: md5
-      md5: 0900db4fb591ba26e829aa1f7fe408f0
+      md5: 3c20afcb31685cf42b67de4d7ebda4eb
       size: 50
