@@ -1,0 +1,61 @@
+name: Daily BigQuery Seed
+
+on:
+  schedule:
+    - cron: '0 23 * * *'  # setiap hari jam 06.00 WIB 
+  workflow_dispatch: {}   
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  seed:
+    name: Seed BigQuery Prediction Logs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/721834211942/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+          service_account: 'mlops-ct-pipeline@project-d50e88c7-b681-48d4-b1b.iam.gserviceaccount.com'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install google-cloud-bigquery
+      - name: Seed 500 rows to BigQuery
+        run: |
+          python -c "
+          from google.cloud import bigquery
+          import json
+          from datetime import datetime, timezone, timedelta
+          import random
+
+          client = bigquery.Client(project='project-d50e88c7-b681-48d4-b1b')
+          table_id = 'project-d50e88c7-b681-48d4-b1b.mlops.prediction_logs'
+
+          rows = []
+          for i in range(500):
+              payload = {
+                  'Gender': random.choice(['Male', 'Female']),
+                  'Age': random.randint(20, 70),
+                  'HasDrivingLicense': random.randint(0, 1),
+                  'RegionID': float(random.randint(1, 52)),
+                  'Switch': random.choice([-1, 0, 1]),
+                  'PastAccident': random.choice(['Yes', 'No', 'Unknown']),
+                  'AnnualPremium': round(random.uniform(800, 6000), 2)
+              }
+              rows.append({
+                  'input_payload': json.dumps(payload),
+                  'timestamp': (datetime.now(timezone.utc) - timedelta(minutes=random.randint(1, 1440))).isoformat(),
+                  'prediction': random.randint(0, 1),
+                  'model_version': 'auto-seed'
+              })
+
+          errors = client.insert_rows_json(table_id, rows)
+          if errors:
+              print('Errors:', errors)
+              exit(1)
+          else:
+              print(f'Berhasil insert {len(rows)} baris ke BigQuery')
+          "
