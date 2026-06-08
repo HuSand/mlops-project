@@ -285,35 +285,6 @@ jobs:
           files: |
             model_card.md
             promote_decision.json
-
-  # JOB 9: GitHub Release
-  release:
-    name: Create GitHub Release
-    needs: [train, artifact-versioning, evaluate]
-    if: needs.evaluate.outputs.decision == 'PROMOTE'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - run: pip install -r requirements.txt
-      - run: |
-          python scripts/gen_model_card.py \
-            --run-id ${{ needs.train.outputs.run_id }} \
-            --model-version ${{ github.run_number }} \
-            --output model_card.md
-      - uses: actions/download-artifact@v4
-        with:
-          name: promote-decision
-      - uses: softprops/action-gh-release@v1
-        with:
-          tag_name: model-v${{ github.run_number }}
-          name: "Model v${{ github.run_number }}"
-          body: "Automated model release from CT Pipeline run #${{ github.run_number }}"
-          files: |
-            model_card.md
-            promote_decision.json
             
   # JOB 10: Notify + Trigger CD
   notify:
