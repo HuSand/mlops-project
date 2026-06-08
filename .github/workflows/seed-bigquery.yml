@@ -37,13 +37,8 @@ jobs:
           rows = []
           for i in range(500):
               payload = {
-                  'Gender': random.choice(['Male', 'Female']),
-                  'Age': random.randint(20, 70),
-                  'HasDrivingLicense': random.randint(0, 1),
-                  'RegionID': float(random.randint(1, 52)),
-                  'Switch': random.choice([-1, 0, 1]),
-                  'PastAccident': random.choice(['Yes', 'No', 'Unknown']),
-                  'AnnualPremium': round(random.uniform(800, 6000), 2)
+                  f'feature_{j}': round(random.uniform(-3.0, 3.0), 6)
+                  for j in range(10)
               }
               rows.append({
                   'input_payload': json.dumps(payload),
