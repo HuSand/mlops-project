@@ -14,3 +14,4 @@ ENABLE_BQ_LOGGING = os.getenv("ENABLE_BQ_LOGGING", "false").lower() == "true"
 BQ_PROJECT = os.getenv("BQ_PROJECT")  # defaults to ADC project when None
 BQ_DATASET = os.getenv("BQ_DATASET", "mlops")
 BQ_TABLE = os.getenv("BQ_TABLE", "prediction_logs")
+BQ_MONITOR_TABLE = os.getenv("BQ_MONITOR_TABLE", "drift_metrics")
