@@ -21,6 +21,7 @@ permissions:
   contents: write
   issues: write
   id-token: write
+  actions: write
 
 env:
   MLFLOW_TRACKING_URI: ${{ secrets.MLFLOW_TRACKING_URI }}
@@ -162,6 +163,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       decision: ${{ steps.get-decision.outputs.decision }}
+    env:
+      PYTHONPATH: .
     steps:
       - uses: actions/checkout@v4
       - uses: google-github-actions/auth@v2
@@ -230,10 +233,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: 'projects/721834211942/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
           service_account: 'mlops-ct-pipeline@project-d50e88c7-b681-48d4-b1b.iam.gserviceaccount.com'
+      - uses: google-github-actions/setup-gcloud@v2 
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
@@ -241,14 +247,24 @@ jobs:
       - run: pip install -r requirements.txt
       - run: dvc pull --force
       - run: python main.py
-      - run: dvc add models/model.pkl
+      - run: dvc status
       - run: dvc push
-      - run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add models.dvc dvc.lock
-          git commit -m "chore(model): retrain model-v${{ github.run_number }}"
+      - name: Copy model to mlflow-artifacts-mlops
+        run: |
+          gsutil cp models/model.pkl gs://mlflow-artifacts-mlops/models/model.pkl
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Commit and Push
+        run: |
+          git add dvc.lock
+          [ -f models.dvc ] && git add models.dvc
+          git commit -m "chore(model): retrain model-v${{ github.run_number }}" || echo "No changes to commit"
           git push origin ${{ github.ref_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # JOB 9: GitHub Release
   release:
@@ -278,7 +294,7 @@ jobs:
           files: |
             model_card.md
             promote_decision.json
-
+            
   # JOB 10: Notify + Trigger CD
   notify:
     name: Notify and Chain
@@ -286,6 +302,7 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4 
       - uses: actions/download-artifact@v4
         with:
           name: promote-decision
@@ -298,7 +315,7 @@ jobs:
             -H "Content-Type: application/json" \
             -d "{
               \"embeds\": [{
-                \"title\": \"CT Pipeline — $DECISION\",
+                \"title\": \"CT Pipeline - $DECISION\",
                 \"color\": $([ \"$DECISION\" = \"PROMOTE\" ] && echo 3066993 || echo 15158332),
                 \"fields\": [
                   {\"name\": \"Accuracy Delta\", \"value\": \"$DELTA\", \"inline\": true},
@@ -306,7 +323,7 @@ jobs:
                   {\"name\": \"Run\", \"value\": \"#${{ github.run_number }}\", \"inline\": true}
                 ]
               }]
-            }"
+            }" || true
       - name: Trigger CD
         if: needs.evaluate.outputs.decision == 'PROMOTE'
         run: gh workflow run cd-backend.yml
