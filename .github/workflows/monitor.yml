@@ -86,7 +86,9 @@ jobs:
 
       - name: Install Evidently
         run: |
-          pip install evidently scikit-learn pandas
+          pip install --upgrade pip
+          pip install "evidently>=0.4.0" scikit-learn pandas
+          python -c "import evidently; print(f'Evidently version: {evidently.__version__}')"
 
       - name: Run Evidently drift report
         run: |
