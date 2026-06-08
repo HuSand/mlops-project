@@ -1,4 +1,4 @@
-name: Daily BigQuery Seed
+name: Daily Monitoring Data Seeding
 
 on:
   schedule:
