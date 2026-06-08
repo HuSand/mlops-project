@@ -36,6 +36,11 @@ def run_drift_report(reference_path: str, current_path: str, output_html: str, o
     try:
         reference = pd.read_csv(reference_path)
         current = pd.read_csv(current_path)
+        
+        # RESET INDEX untuk menghindari pandas.errors.InvalidIndexError: 
+        # Reindexing only valid with uniquely valued Index objects
+        reference = reference.reset_index(drop=True)
+        current = current.reset_index(drop=True)
     except Exception as e:
         print(f"ERROR: Gagal membaca file CSV: {e}")
         sys.exit(1)
