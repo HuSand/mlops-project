@@ -243,6 +243,9 @@ jobs:
       - run: python main.py
       - run: dvc add models/model.pkl
       - run: dvc push
+      - name: Copy model to mlflow-artifacts-mlops
+        run: |
+          gsutil cp models/model.pkl gs://mlflow-artifacts-mlops/models/model.pkl
       - run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
