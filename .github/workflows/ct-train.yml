@@ -162,6 +162,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       decision: ${{ steps.get-decision.outputs.decision }}
+    env:
+      PYTHONPATH: .
     steps:
       - uses: actions/checkout@v4
       - uses: google-github-actions/auth@v2
