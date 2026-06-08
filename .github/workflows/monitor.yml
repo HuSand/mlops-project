@@ -84,14 +84,12 @@ jobs:
           name: monitoring-datasets
           path: monitoring/data/
 
-      - name: Install Evidently
+      - name: Install Dependencies and Run Report
+        id: run_report
         run: |
           pip install --upgrade pip
           pip install "evidently>=0.4.0" scikit-learn pandas
-          python -c "import evidently; print(f'Evidently version: {evidently.__version__}')"
-
-      - name: Run Evidently drift report
-        run: |
+          
           mkdir -p monitoring/reports
           python monitoring/evidently_report.py \
             --reference monitoring/data/reference_data.csv \
@@ -99,9 +97,6 @@ jobs:
             --output-html monitoring/reports/drift_report.html \
             --output-json monitoring/reports/drift_metrics.json
 
-      - name: Check drift threshold
-        id: check_threshold
-        run: |
           DRIFT_SCORE=$(python -c "
           import json
           with open('monitoring/reports/drift_metrics.json') as f:
