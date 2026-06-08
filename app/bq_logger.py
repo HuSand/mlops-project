@@ -57,11 +57,11 @@ def notify_discord(payload: dict, prediction: int) -> None:
     if not webhook_url:
         return
     try:
-        label = "✅ Tertarik Beli" if prediction == 1 else "❌ Tidak Tertarik"
+        label = "Tertarik Beli" if prediction == 1 else "Tidak Tertarik"
         color = 3066993 if prediction == 1 else 15158332
         embed = {
             "embeds": [{
-                "title": f"Prediksi Baru — {label}",
+                "title": f"Prediksi Baru - {label}",
                 "color": color,
                 "fields": [
                     {"name": "Gender", "value": str(payload.get("Gender", "-")), "inline": True},
