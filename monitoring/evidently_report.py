@@ -34,21 +34,20 @@ def run_drift_report(reference_path: str, current_path: str, output_html: str, o
 
     # 1. Load data
     try:
-        reference = pd.read_csv(reference_path)
-        current = pd.read_csv(current_path)
-        
-        # RESET INDEX untuk menghindari pandas.errors.InvalidIndexError: 
-        # Reindexing only valid with uniquely valued Index objects
-        reference = reference.reset_index(drop=True)
-        current = current.reset_index(drop=True)
+        # Load and immediately reset index to avoid any indexing issues
+        reference = pd.read_csv(reference_path).reset_index(drop=True)
+        current = pd.read_csv(current_path).reset_index(drop=True)
     except Exception as e:
         print(f"ERROR: Gagal membaca file CSV: {e}")
         sys.exit(1)
 
     # 2. Sinkronisasi Nama Kolom
-    # Data Reference (Training) kita sekarang punya nama: Gender, Age, dll.
-    # Data Current (Production) dari BigQuery ternyata punya nama: feature_0, feature_1, dll.
+    # Data Reference (Training) sekarang punya nama: Gender, Age, dll.
+    # Data Current (Production) dari BigQuery punya nama: feature_0, feature_1, dll.
     
+    # Samakan kolom target/prediction agar bisa dibandingkan
+    reference = reference.rename(columns={"target": "prediction"})
+
     mapping_for_current = {
         "feature_0": "Gender",
         "feature_1": "Age",
@@ -56,16 +55,19 @@ def run_drift_report(reference_path: str, current_path: str, output_html: str, o
         "feature_3": "RegionID",
         "feature_4": "Switch",
         "feature_5": "PastAccident",
-        "feature_6": "AnnualPremium",
-        "prediction": "prediction"
+        "feature_6": "AnnualPremium"
     }
     
     print("--- SCHEMA CROSS-CHECK ---")
     print(f"Reference Columns: {list(reference.columns)}")
     print(f"Current Raw Columns: {list(current.columns)}")
     
-    # Kita ubah nama kolom di data Current agar match dengan Reference
+    # Ubah nama di data Current
     current = current.rename(columns=mapping_for_current)
+    
+    # CRITICAL: Hapus kolom duplikat jika ada (misal Gender dan feature_0 sama-sama ada)
+    reference = reference.loc[:, ~reference.columns.duplicated()]
+    current = current.loc[:, ~current.columns.duplicated()]
     
     # 3. Definisikan Column Mapping
     column_mapping = ColumnMapping()
@@ -75,6 +77,10 @@ def run_drift_report(reference_path: str, current_path: str, output_html: str, o
 
     # Ambil hanya kolom yang ada di kedua data (irisan)
     common_cols = [c for c in reference.columns if c in current.columns]
+    
+    # Pastikan index tetap bersih sebelum masuk ke Evidently
+    reference = reference[common_cols].reset_index(drop=True)
+    current = current[common_cols].reset_index(drop=True)
     
     # Pastikan ada data untuk dianalisis
     if len(common_cols) < 2:
