@@ -86,7 +86,7 @@ jobs:
 
       - name: Install Evidently
         run: |
-          pip install evidently==0.7.21 pandas
+          pip install evidently scikit-learn pandas
 
       - name: Run Evidently drift report
         run: |
