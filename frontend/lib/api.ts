@@ -2,16 +2,13 @@ const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "https://insurance-api-dev-6n767ucvla-et.a.run.app";
 
 export interface InputData {
-  feature_0: number;
-  feature_1: number;
-  feature_2: number;
-  feature_3: number;
-  feature_4: number;
-  feature_5: number;
-  feature_6: number;
-  feature_7: number;
-  feature_8: number;
-  feature_9: number;
+  Gender: string;
+  Age: number;
+  HasDrivingLicense: number;
+  RegionID: number;
+  Switch: number;
+  PastAccident: string;
+  AnnualPremium: number;
 }
 
 export interface PredictResponse {
@@ -103,6 +100,36 @@ export async function getMonitoringOps(): Promise<MonitoringOps> {
   });
   if (!res.ok) {
     throw new Error(`Ops fetch failed (${res.status})`);
+  }
+  return res.json();
+}
+
+export interface ABComparison {
+  status: "success" | "error";
+  message?: string;
+  data?: {
+    window_hours: number;
+    total_predictions: number;
+    versions: {
+      model_version: string;
+      n: number;
+      positive_rate: number;
+      traffic_pct: number;
+      first_seen: string | null;
+      last_seen: string | null;
+    }[];
+    comparison: {
+      champion: string;
+      challenger: string;
+      positive_rate_delta: number;
+    } | null;
+  };
+}
+
+export async function getABComparison(): Promise<ABComparison> {
+  const res = await fetch(`${API_BASE}/api/v1/ab/compare`, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`A/B fetch failed (${res.status})`);
   }
   return res.json();
 }

@@ -4,105 +4,83 @@ import { useState } from "react";
 import Link from "next/link";
 import { postPredict, type InputData, type PredictResponse } from "@/lib/api";
 
-type Option = { label: string; value: string | number };
-
 interface FieldDef {
   name: keyof InputData;
   label: string;
   hint?: string;
   type: "number" | "select";
   step?: string;
-  options?: Option[];
+  options?: { label: string; value: string | number }[];
 }
 
 const FIELDS: FieldDef[] = [
   {
-    name: "feature_0",
+    name: "Gender",
     label: "Gender",
-    hint: "Display only; value is sent as feature_0",
+    type: "select",
+    options: [
+      { label: "Female", value: "Female" },
+      { label: "Male", value: "Male" },
+    ],
+  },
+  { name: "Age", label: "Age", type: "number", step: "1", hint: "years" },
+  {
+    name: "HasDrivingLicense",
+    label: "Driving license",
+    type: "select",
+    options: [
+      { label: "Yes", value: 1 },
+      { label: "No", value: 0 },
+    ],
+  },
+  { name: "RegionID", label: "Region ID", type: "number", step: "1" },
+  {
+    name: "Switch",
+    label: "Previously switched",
+    type: "select",
+    options: [
+      { label: "No", value: 0 },
+      { label: "Yes", value: 1 },
+      { label: "Unknown", value: -1 },
+    ],
+  },
+  {
+    name: "PastAccident",
+    label: "Past accident",
+    type: "select",
+    options: [
+      { label: "No", value: "No" },
+      { label: "Yes", value: "Yes" },
+      { label: "Unknown", value: "Unknown" },
+    ],
+  },
+  {
+    name: "AnnualPremium",
+    label: "Annual premium",
     type: "number",
     step: "any",
-  },
-  {
-    name: "feature_1",
-    label: "Age",
-    hint: "Customer age in years",
-    type: "number",
-    step: "1",
-  },
-  {
-    name: "feature_2",
-    label: "Has Driving License",
-    hint: "Display only; value is sent as feature_2",
-    type: "number",
-    step: "any",
-  },
-  {
-    name: "feature_3",
-    label: "Region",
-    hint: "Customer region code",
-    type: "number",
-    step: "1",
-  },
-  {
-    name: "feature_4",
-    label: "Switch",
-    hint: "Display only; value is sent as feature_4",
-    type: "number",
-    step: "any",
-  },
-  {
-    name: "feature_5",
-    label: "Past Accident",
-    hint: "Display only; value is sent as feature_5",
-    type: "number",
-    step: "any",
-  },
-  {
-    name: "feature_6",
-    label: "Annual Premium",
-    hint: "Annual premium amount",
-    type: "number",
-    step: "any",
-  },
-  {
-    name: "feature_7",
-    label: "Feature 7",
-    hint: "One of the internal model features",
-    type: "number",
-    step: "any",
-  },
-  {
-    name: "feature_8",
-    label: "Feature 8",
-    hint: "One of the internal model features",
-    type: "number",
-    step: "any",
-  },
-  {
-    name: "feature_9",
-    label: "Feature 9",
-    hint: "One of the internal model features",
-    type: "number",
-    step: "any",
+    hint: "currency amount",
   },
 ];
 
-// A non-trivial sample so the form doesn't submit all zeros.
 const DEFAULTS: InputData = {
-  feature_0: 1,
-  feature_1: 35,
-  feature_2: 1,
-  feature_3: 12,
-  feature_4: 0,
-  feature_5: 0,
-  feature_6: 25000,
-  feature_7: 0.1,
-  feature_8: -0.2,
-  feature_9: 0.3,
+  Gender: "Female",
+  Age: 46,
+  HasDrivingLicense: 1,
+  RegionID: 21,
+  Switch: 0,
+  PastAccident: "Yes",
+  AnnualPremium: 2305.4,
 };
 
-const NUMERIC: (keyof InputData)[] = FIELDS.map((f) => f.name);
+// Fields whose value must be coerced to a number on input.
+const NUMERIC: (keyof InputData)[] = [
+  "Age",
+  "HasDrivingLicense",
+  "RegionID",
+  "Switch",
+  "AnnualPremium",
+];
 
 export default function PredictPage() {
   const [form, setForm] = useState<InputData>(DEFAULTS);
@@ -147,10 +125,6 @@ export default function PredictPage() {
           Fill in the customer attributes and the model will estimate whether
           they are likely to buy vehicle insurance.
         </p>
-        <p className="muted" style={{ margin: "8px 0 0", fontSize: 14 }}>
-          Labels ditampilkan lebih ramah di frontend; nilai tetap dikirim ke
-          backend sebagai feature_0..feature_9.
-        </p>
       </div>
 
       <form className="card" onSubmit={onSubmit}>
@@ -158,8 +132,7 @@ export default function PredictPage() {
           {FIELDS.map((f) => (
             <div className="field" key={f.name}>
               <label htmlFor={f.name}>
-                {f.label}{" "}
-                {f.hint && <span className="hint">{f.hint}</span>}
+                {f.label} {f.hint && <span className="hint">({f.hint})</span>}
               </label>
               {f.type === "select" ? (
                 <select

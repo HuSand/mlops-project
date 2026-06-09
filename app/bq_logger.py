@@ -51,31 +51,27 @@ def log_prediction(payload: dict, prediction: int | None = None) -> None:
     except Exception as e:  # noqa: BLE001 - logging must never break /predict
         logger.warning("BQ prediction logging failed (non-fatal): %s", e)
 
-def notify_api_hit(endpoint: str, detail: dict | None = None) -> None:
-    """Kirim notifikasi ke Discord setiap endpoint backend di-hit.
+def log_api_hit(endpoint: str) -> None:
+    """Record a single API hit to BigQuery (``{BQ_DATASET}.api_hits``).
 
-    Webhook diambil dari env ``DISCORD_WEBHOOK_API`` (di-set di Cloud Run oleh
-    cd-backend). No-op kalau env kosong; best-effort dan tidak pernah membuat
-    request gagal.
+    Per-request Discord notifications were too noisy, so hits are logged here and
+    aggregated every 6h by ``api-hit-digest.yml`` into a single digest. No-op when
+    BQ logging is disabled; best-effort and never breaks the request.
     """
-    webhook_url = os.environ.get("DISCORD_WEBHOOK_API")
-    if not webhook_url:
+    if not config.ENABLE_BQ_LOGGING:
         return
     try:
-        fields = [{"name": "Endpoint", "value": str(endpoint), "inline": True}]
-        for key, value in (detail or {}).items():
-            fields.append({"name": str(key), "value": str(value), "inline": True})
-        embed = {
-            "embeds": [{
-                "title": "API Hit",
-                "color": 3447003,  # blue
-                "fields": fields,
-                "footer": {"text": f"env: {config.APP_ENV} · v{config.MODEL_VERSION}"},
-            }]
+        client = _get_client()
+        table_id = f"{config.BQ_PROJECT}.{config.BQ_DATASET}.{config.BQ_API_HITS_TABLE}"
+        row = {
+            "endpoint": endpoint,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
-        requests.post(webhook_url, json=embed, timeout=5)
-    except Exception as e:  # noqa: BLE001 - notifikasi tidak boleh memecah request
-        logger.warning("Discord API-hit notification failed (non-fatal): %s", e)
+        errors = client.insert_rows_json(table_id, [row])
+        if errors:
+            logger.warning("BQ api_hit insert errors: %s", errors)
+    except Exception as e:  # noqa: BLE001 - logging must never break the request
+        logger.warning("BQ api_hit logging failed (non-fatal): %s", e)
 
 
 def notify_discord(payload: dict, prediction: int) -> None:
@@ -86,16 +82,16 @@ def notify_discord(payload: dict, prediction: int) -> None:
     try:
         label = "Tertarik Beli" if prediction == 1 else "Tidak Tertarik"
         color = 3066993 if prediction == 1 else 15158332
-        # Show the first few features generically (schema is feature_0..feature_9).
-        feature_fields = [
-            {"name": key, "value": str(value), "inline": True}
-            for key, value in list(payload.items())[:5]
-        ]
         embed = {
             "embeds": [{
                 "title": f"Prediksi Baru - {label}",
                 "color": color,
-                "fields": feature_fields + [
+                "fields": [
+                    {"name": "Gender", "value": str(payload.get("Gender", "-")), "inline": True},
+                    {"name": "Age", "value": str(payload.get("Age", "-")), "inline": True},
+                    {"name": "Annual Premium", "value": str(payload.get("AnnualPremium", "-")), "inline": True},
+                    {"name": "Past Accident", "value": str(payload.get("PastAccident", "-")), "inline": True},
+                    {"name": "Has Driving License", "value": str(payload.get("HasDrivingLicense", "-")), "inline": True},
                     {"name": "Result", "value": label, "inline": True},
                 ],
                 "footer": {"text": f"Model version: {config.MODEL_VERSION}"}

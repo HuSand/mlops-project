@@ -16,7 +16,15 @@ from app.main import app  # noqa: E402
 from app import model as model_mod  # noqa: E402
 from app import routes  # noqa: E402
 
-VALID_PAYLOAD = {f"feature_{i}": float(i) / 10 for i in range(10)}
+VALID_PAYLOAD = {
+    "Gender": "Male",
+    "Age": 30,
+    "HasDrivingLicense": 1,
+    "RegionID": 5,
+    "Switch": 0,
+    "PastAccident": "No",
+    "AnnualPremium": 1000.0,
+}
 
 
 @pytest.fixture
@@ -95,7 +103,7 @@ class _FakeBQClient:
 
 def _patch_bq(monkeypatch, rows):
     monkeypatch.setattr(routes.bigquery, "Client", lambda *a, **k: _FakeBQClient(rows))
-    monkeypatch.setattr(routes.bq_logger, "notify_api_hit", lambda *a, **k: None)
+    monkeypatch.setattr(routes.bq_logger, "log_api_hit", lambda *a, **k: None)
 
 
 def test_monitoring_latest_success(client, monkeypatch):
@@ -212,6 +220,33 @@ def test_monitoring_ops_success(client, monkeypatch):
     assert data["last_prediction_ts"].startswith("2026-06-09")
     assert data["volume_by_day"][-1]["n"] == 2000
     assert data["by_model_version"][0]["model_version"] == "auto-seed-v2"
+
+
+def test_ab_compare_success(client, monkeypatch):
+    from datetime import datetime, timezone
+
+    rows = [
+        {"model_version": "auto-seed-v2", "n": 2000, "positive_rate": 51.4,
+         "first_seen": datetime(2026, 6, 7, tzinfo=timezone.utc),
+         "last_seen": datetime(2026, 6, 9, 4, tzinfo=timezone.utc)},
+        {"model_version": "challenger-30", "n": 100, "positive_rate": 33.3,
+         "first_seen": datetime(2026, 6, 9, 9, tzinfo=timezone.utc),
+         "last_seen": datetime(2026, 6, 9, 10, tzinfo=timezone.utc)},
+    ]
+    monkeypatch.setattr(
+        routes.bigquery, "Client",
+        lambda *a, **k: _RoutingBQClient([("AS positive_rate", rows)]),
+    )
+
+    r = client.get("/api/v1/ab/compare?hours=168")
+    assert r.status_code == 200
+    data = r.json()["data"]
+    assert data["total_predictions"] == 2100
+    assert data["versions"][0]["model_version"] == "auto-seed-v2"
+    assert data["versions"][0]["traffic_pct"] == round(2000 / 2100 * 100, 1)
+    assert data["comparison"]["champion"] == "auto-seed-v2"
+    assert data["comparison"]["challenger"] == "challenger-30"
+    assert data["comparison"]["positive_rate_delta"] == -18.1
 
 
 # ----------------------------- lifespan -----------------------------
