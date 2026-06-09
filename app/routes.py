@@ -33,7 +33,7 @@ async def get_latest_monitoring():
         if row.drifted_features:
             try:
                 drifted_features = json.loads(row.drifted_features)
-            except:
+            except Exception:
                 drifted_features = []
 
         return {

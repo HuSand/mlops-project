@@ -28,13 +28,13 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
       - name: Code Linting (Ruff)
-        run: ruff check . || echo "Ada kode tidak rapi, lewatkan dulu"
+        run: ruff check .
 
-      - name: Unit Testing (Pytest)
-        run: pytest || echo "Belum ada file test dari tim, dilewati sementara"
+      - name: Unit Testing & MLOps Validation
+        run: pytest
 
       - name: Security Scan (Bandit)
-        run: bandit -r . -ll -ii -x ./venv,./tests || echo "Selesai scan"
+        run: bandit -r . -ll -ii -x ./venv,./tests
 
   container-validation:
     name: 📦 Docker Build Validation
@@ -47,8 +47,9 @@ jobs:
 
       - name: Docker Build Test
         run: |
-          if [ -f Dockerfile ]; then
+          if [ -f dockerfile ]; then
             docker build -t insurance-api-test .
           else
-            echo "Tim belum membuat Dockerfile, dilewati sementara"
+            echo "dockerfile tidak ditemukan! Build gagal."
+            exit 1
           fi

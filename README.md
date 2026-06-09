@@ -7,6 +7,15 @@
 **Maintained by**: MLOps Team (4 members)
 
 ---
+# MLOps Project - Kelompok 7 (PSO B)
+
+**Anggota Tim:**
+- P1: Muhammad Daniel A. (CI Owner)
+- P2: Sandythia Lova R.K. (CT Owner)
+- P3: Gerald Marcell V.R. (CD Owner)
+- P4: Muhammad Ridho U. (CM Owner)
+
+---
 
 ## Table of Contents
 

@@ -18,8 +18,8 @@ except ImportError:
     except ImportError:
         try:
             # Versi Legacy
-            from evidently.dashboard import Dashboard
-            from evidently.tabs import DataDriftTab, CatTargetDriftTab
+            # from evidently.dashboard import Dashboard
+            # from evidently.tabs import DataDriftTab, CatTargetDriftTab
             print("WARNING: Using legacy Evidently structure. Report might look different.")
             # Mocking modern classes for legacy if needed (advanced)
             # Untuk sekarang kita stop jika versi terlalu lama

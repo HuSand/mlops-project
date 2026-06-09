@@ -1,6 +1,5 @@
 import pytest
 import pandas as pd
-import numpy as np
 import sys
 from pathlib import Path
 
@@ -53,7 +52,7 @@ def test_build_schema_without_target():
 
 
 def test_validate_valid_data(valid_data):
-    result = main.__wrapped__(valid_data) if hasattr(main, '__wrapped__') else None
+    main.__wrapped__(valid_data) if hasattr(main, '__wrapped__') else None
     import sys
     sys.argv = ['validate.py', str(valid_data)]
     from ml.validate import main as validate_main
