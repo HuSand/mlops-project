@@ -203,8 +203,13 @@ function DriftSection({ drift }: { drift: MonitoringResponse }) {
           </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {d.drift_details.map((f) => (
-              <span key={f} className="status">
-                <span className="dot red" /> {f}
+              <span
+                key={f.feature}
+                className="status"
+                title={`drift score: ${f.drift_score.toFixed(3)}`}
+              >
+                <span className="dot red" /> {f.feature}
+                <span className="muted mono">&nbsp;{f.drift_score.toFixed(2)}</span>
               </span>
             ))}
           </div>

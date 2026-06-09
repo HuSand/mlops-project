@@ -35,7 +35,7 @@ export interface MonitoringResponse {
       number_of_columns: number;
       drifted_columns_count: number;
     };
-    drift_details: string[];
+    drift_details: { feature: string; drift_score: number }[];
     data_health: {
       missing_values_count: number;
       total_predictions: number;

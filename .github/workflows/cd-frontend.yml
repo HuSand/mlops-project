@@ -61,11 +61,16 @@ jobs:
         run: |
           URL="${{ steps.deploy.outputs.url }}"
           for i in 1 2 3 4 5; do
-            if curl -fsS -o /dev/null "$URL"; then echo "OK: $URL"; exit 0; fi
-            echo "Attempt $i failed, retrying in 10s..."
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" "$URL" || echo "000")
+            echo "Attempt $i: HTTP $CODE"
+            # 2xx/3xx = reachable. 401/403 = deployed but behind Vercel Deployment
+            # Protection (auth wall) -> still a successful deploy.
+            case "$CODE" in
+              2??|3??|401|403) echo "Deployment reachable ($CODE)"; exit 0 ;;
+            esac
             sleep 10
           done
-          echo "Smoke test failed"
+          echo "Smoke test failed (no response / server error)"
           exit 1
 
       - name: Notify Discord (deploy)
