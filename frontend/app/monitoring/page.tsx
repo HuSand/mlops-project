@@ -121,6 +121,16 @@ function ABSection({ ab }: { ab: ABComparison }) {
     traffic_pct: v.traffic_pct,
     positive_rate: v.positive_rate,
   }));
+  // Chronological performance: one point per model version (each training run),
+  // ordered by when it first appeared.
+  const timeline = [...versions]
+    .filter((v) => v.first_seen)
+    .sort((a, b) => (a.first_seen! < b.first_seen! ? -1 : 1))
+    .map((v) => ({
+      model_version: v.model_version,
+      positive_rate: v.positive_rate,
+      predictions: v.n,
+    }));
 
   return (
     <>
@@ -159,6 +169,17 @@ function ABSection({ ab }: { ab: ABComparison }) {
           yKey="positive_rate"
           colorByIndex
           unit="%"
+        />
+      </div>
+      <div style={{ marginTop: 16 }}>
+        <LineCard
+          title="Model performance over time"
+          subtitle="positive-prediction rate per model version (each training, oldest → newest)"
+          data={timeline}
+          xKey="model_version"
+          lines={[
+            { key: "positive_rate", name: "Positive %", color: COLORS.accent2 },
+          ]}
         />
       </div>
     </>
