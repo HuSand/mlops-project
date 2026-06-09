@@ -134,6 +134,9 @@ jobs:
               print(f'Warning: {e}')
           "
       - run: python main.py
+        env:
+          MLFLOW_HTTP_REQUEST_TIMEOUT: 300
+          MLFLOW_HTTP_REQUEST_MAX_RETRIES: 5
       - name: Get MLflow run ID
         id: get-run-id
         run: |
