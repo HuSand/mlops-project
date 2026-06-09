@@ -109,6 +109,8 @@ jobs:
       - run: pip install "dvc[gs]"
       - run: pip install -r requirements.txt
       - run: dvc pull --force
+      - run: pip install -r requirements.txt
+      - run: pip install google-cloud-bigquery "protobuf>=4.21.0,<5.0.0" --force-reinstall
       - name: Continuous Learning — merge BigQuery data
         run: |
           python scripts/continuous_learning.py || echo "Continuous learning skipped (no new data)"
@@ -134,6 +136,9 @@ jobs:
               print(f'Warning: {e}')
           "
       - run: python main.py
+        env:
+          MLFLOW_HTTP_REQUEST_TIMEOUT: 300
+          MLFLOW_HTTP_REQUEST_MAX_RETRIES: 5
       - name: Get MLflow run ID
         id: get-run-id
         run: |
@@ -201,8 +206,14 @@ jobs:
       - run: pip install "dvc[gs]"
       - run: pip install -r requirements.txt
       - run: dvc pull --force
-      - run: |
-          python scripts/promote_model.py ${{ needs.train.outputs.run_id }} || python -c "
+      - name: Run promote model
+        id: promote
+        run: python scripts/promote_model.py ${{ needs.train.outputs.run_id }}
+        continue-on-error: true
+      - name: Fallback if promote failed
+        if: steps.promote.outcome == 'failure'
+        run: |
+          python -c "
           import json
           with open('promote_decision.json', 'w') as f:
               json.dump({'decision': 'KEEP_STAGING', 'accuracy_delta': 0, 'p_value': 1.0, 'challenger_accuracy': 0, 'champion_accuracy': 0, 'run_id': '${{ needs.train.outputs.run_id }}'}, f)

@@ -164,7 +164,7 @@ def main() -> int:
         return 1
 
     print(json.dumps(result, indent=2))
-    return 0 if decision == "PROMOTE" else 1
+    return 0 
 
 
 if __name__ == "__main__":
