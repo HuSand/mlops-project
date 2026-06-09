@@ -109,6 +109,8 @@ jobs:
       - run: pip install "dvc[gs]"
       - run: pip install -r requirements.txt
       - run: dvc pull --force
+      - run: pip install -r requirements.txt
+      - run: pip install google-cloud-bigquery
       - name: Continuous Learning — merge BigQuery data
         run: |
           python scripts/continuous_learning.py || echo "Continuous learning skipped (no new data)"
