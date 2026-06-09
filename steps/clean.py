@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import re
 from sklearn.impute import SimpleImputer
 
 class Cleaner:
@@ -8,11 +9,24 @@ class Cleaner:
         self.cat_imputer = SimpleImputer(strategy='most_frequent')
 
     def clean_data(self, data):
+        # Drop kolom yang tidak diperlukan
         columns_to_drop = ['id', 'SalesChannelID', 'VehicleAge', 'DaysSinceCreated']
-        data = data.drop(columns=columns_to_drop, errors='ignore')
-        # BARU: Ubah string uang menjadi angka murni (float)
-        if 'AnnualPremium' in data.columns and data['AnnualPremium'].dtype == object:
-            data['AnnualPremium'] = data['AnnualPremium'].replace({r'£': '', r',': ''}, regex=True).astype(float)
+        data = data.drop(columns=[c for c in columns_to_drop if c in data.columns], errors='ignore')
+        
+        # Fix AnnualPremium — hapus karakter non-numerik
+        if 'AnnualPremium' in data.columns:
+            data['AnnualPremium'] = data['AnnualPremium'].astype(str).apply(
+                lambda x: re.sub(r'[^\d.]', '', x)
+            ).replace('', np.nan).astype(float)
+            
+        # Aturan khusus untuk nilai kosong sesuai permintaan Test
+        if 'Switch' in data.columns:
+            data['Switch'] = data['Switch'].fillna(-1)
+        if 'HasDrivingLicense' in data.columns:
+            data['HasDrivingLicense'] = data['HasDrivingLicense'].fillna(1)
+        if 'PastAccident' in data.columns:
+            data['PastAccident'] = data['PastAccident'].fillna('Unknown')
+            
         feature_cols = [col for col in data.columns if col != 'target']
         
         # Pisahkan kolom numerik dan kategorik
