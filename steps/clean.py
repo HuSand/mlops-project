@@ -8,6 +8,8 @@ class Cleaner:
         self.cat_imputer = SimpleImputer(strategy='most_frequent')
 
     def clean_data(self, data):
+        columns_to_drop = ['id', 'SalesChannelID', 'VehicleAge', 'DaysSinceCreated']
+        data = data.drop(columns=columns_to_drop, errors='ignore')
         feature_cols = [col for col in data.columns if col != 'target']
         
         # Pisahkan kolom numerik dan kategorik
