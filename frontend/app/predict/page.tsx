@@ -15,26 +15,91 @@ interface FieldDef {
   options?: Option[];
 }
 
-// The deployed model expects 10 numeric features (feature_0..feature_9).
-const FIELDS: FieldDef[] = Array.from({ length: 10 }, (_, i) => ({
-  name: `feature_${i}` as keyof InputData,
-  label: `Feature ${i}`,
-  type: "number",
-  step: "any",
-}));
+const FIELDS: FieldDef[] = [
+  {
+    name: "feature_0",
+    label: "Gender",
+    hint: "Display only; value is sent as feature_0",
+    type: "number",
+    step: "any",
+  },
+  {
+    name: "feature_1",
+    label: "Age",
+    hint: "Customer age in years",
+    type: "number",
+    step: "1",
+  },
+  {
+    name: "feature_2",
+    label: "Has Driving License",
+    hint: "Display only; value is sent as feature_2",
+    type: "number",
+    step: "any",
+  },
+  {
+    name: "feature_3",
+    label: "Region",
+    hint: "Customer region code",
+    type: "number",
+    step: "1",
+  },
+  {
+    name: "feature_4",
+    label: "Switch",
+    hint: "Display only; value is sent as feature_4",
+    type: "number",
+    step: "any",
+  },
+  {
+    name: "feature_5",
+    label: "Past Accident",
+    hint: "Display only; value is sent as feature_5",
+    type: "number",
+    step: "any",
+  },
+  {
+    name: "feature_6",
+    label: "Annual Premium",
+    hint: "Annual premium amount",
+    type: "number",
+    step: "any",
+  },
+  {
+    name: "feature_7",
+    label: "Feature 7",
+    hint: "One of the internal model features",
+    type: "number",
+    step: "any",
+  },
+  {
+    name: "feature_8",
+    label: "Feature 8",
+    hint: "One of the internal model features",
+    type: "number",
+    step: "any",
+  },
+  {
+    name: "feature_9",
+    label: "Feature 9",
+    hint: "One of the internal model features",
+    type: "number",
+    step: "any",
+  },
+];
 
 // A non-trivial sample so the form doesn't submit all zeros.
 const DEFAULTS: InputData = {
-  feature_0: 0.5,
-  feature_1: -0.3,
-  feature_2: 1.2,
-  feature_3: 0.0,
-  feature_4: -1.0,
-  feature_5: 0.8,
-  feature_6: 0.2,
-  feature_7: -0.5,
-  feature_8: 1.0,
-  feature_9: -0.2,
+  feature_0: 1,
+  feature_1: 35,
+  feature_2: 1,
+  feature_3: 12,
+  feature_4: 0,
+  feature_5: 0,
+  feature_6: 25000,
+  feature_7: 0.1,
+  feature_8: -0.2,
+  feature_9: 0.3,
 };
 
 const NUMERIC: (keyof InputData)[] = FIELDS.map((f) => f.name);
@@ -81,6 +146,10 @@ export default function PredictPage() {
         <p className="muted" style={{ margin: 0 }}>
           Fill in the customer attributes and the model will estimate whether
           they are likely to buy vehicle insurance.
+        </p>
+        <p className="muted" style={{ margin: "8px 0 0", fontSize: 14 }}>
+          Labels ditampilkan lebih ramah di frontend; nilai tetap dikirim ke
+          backend sebagai feature_0..feature_9.
         </p>
       </div>
 
