@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
+  getABComparison,
   getMonitoring,
   getMonitoringOps,
+  type ABComparison,
   type MonitoringOps,
   type MonitoringResponse,
 } from "@/lib/api";
@@ -12,7 +14,7 @@ import { BarCard, COLORS, LineCard } from "../_components/Charts";
 
 type State =
   | { kind: "loading" }
-  | { kind: "ok"; drift: MonitoringResponse; ops: MonitoringOps }
+  | { kind: "ok"; drift: MonitoringResponse; ops: MonitoringOps; ab: ABComparison }
   | { kind: "error"; message: string };
 
 function Metric({
@@ -44,8 +46,8 @@ export default function MonitoringPage() {
 
   const load = useCallback(() => {
     setState({ kind: "loading" });
-    Promise.all([getMonitoring(), getMonitoringOps()])
-      .then(([drift, ops]) => setState({ kind: "ok", drift, ops }))
+    Promise.all([getMonitoring(), getMonitoringOps(), getABComparison()])
+      .then(([drift, ops, ab]) => setState({ kind: "ok", drift, ops, ab }))
       .catch((e) => setState({ kind: "error", message: e?.message ?? "unreachable" }));
   }, []);
 
@@ -94,6 +96,7 @@ export default function MonitoringPage() {
 
       {state.kind === "ok" && (
         <>
+          <ABSection ab={state.ab} />
           <OpsSection ops={state.ops} />
           <DriftSection drift={state.drift} />
         </>
@@ -105,6 +108,60 @@ export default function MonitoringPage() {
         </Link>
       </p>
     </main>
+  );
+}
+
+function ABSection({ ab }: { ab: ABComparison }) {
+  if (ab.status !== "success" || !ab.data || ab.data.versions.length === 0) {
+    return null; // A/B panel is optional; stay quiet when there's no data
+  }
+  const { versions, comparison, window_hours, total_predictions } = ab.data;
+  const chartData = versions.map((v) => ({
+    model_version: v.model_version,
+    traffic_pct: v.traffic_pct,
+    positive_rate: v.positive_rate,
+  }));
+
+  return (
+    <>
+      <p className="section-title">Model A/B (champion vs challenger)</p>
+      <div style={{ marginBottom: 16 }}>
+        {comparison ? (
+          <span className="status">
+            <span className="dot green" /> champion <b>&nbsp;{comparison.champion}</b>
+            &nbsp;vs challenger <b>&nbsp;{comparison.challenger}</b> · pos-rate Δ{" "}
+            <span className="mono">
+              {comparison.positive_rate_delta > 0 ? "+" : ""}
+              {comparison.positive_rate_delta}%
+            </span>
+          </span>
+        ) : (
+          <span className="status">
+            <span className="dot amber" /> single version (no challenger traffic yet)
+          </span>
+        )}
+      </div>
+      <div className="grid cols-2">
+        <BarCard
+          title="Traffic share"
+          subtitle={`last ${window_hours}h · ${total_predictions} predictions`}
+          data={chartData}
+          xKey="model_version"
+          yKey="traffic_pct"
+          colorByIndex
+          unit="%"
+        />
+        <BarCard
+          title="Positive-prediction rate"
+          subtitle="% predicted class 1 per version"
+          data={chartData}
+          xKey="model_version"
+          yKey="positive_rate"
+          colorByIndex
+          unit="%"
+        />
+      </div>
+    </>
   );
 }
 

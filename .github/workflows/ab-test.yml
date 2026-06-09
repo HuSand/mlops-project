@@ -1,0 +1,199 @@
+name: Model A/B Test (Cloud Run traffic split)
+
+# Online champion-vs-challenger using Cloud Run revision tags + traffic
+# splitting. Each revision logs predictions to BigQuery tagged with its
+# MODEL_VERSION, so the analysis reads prediction_logs to compare them.
+#
+# Lifecycle (run manually via "Run workflow"):
+#   start    -> deploy challenger revision (tagged), shift N% traffic to it
+#   analyze  -> compare champion vs challenger in BigQuery, post Discord verdict
+#   promote  -> send 100% traffic to challenger (challenger wins)
+#   rollback -> send 100% traffic back to champion
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'start | analyze | promote | rollback'
+        required: true
+        default: 'analyze'
+      challenger_percent:
+        description: 'Traffic % for challenger (start only)'
+        required: false
+        default: '10'
+      challenger_image:
+        description: 'Challenger image tag (start only; defaults to :latest)'
+        required: false
+        default: ''
+      challenger_model_uri:
+        description: 'GCS model URI for challenger (start only; optional)'
+        required: false
+        default: ''
+      window_hours:
+        description: 'Analysis window in hours (analyze only)'
+        required: false
+        default: '24'
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  REGION: asia-southeast2
+  AR_REPO: mlops-images
+  IMAGE_NAME: insurance-api
+  SERVICE: insurance-api-dev
+
+jobs:
+  ab:
+    name: A/B ${{ github.event.inputs.action }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/721834211942/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+          service_account: 'mlops-ct-pipeline@project-d50e88c7-b681-48d4-b1b.iam.gserviceaccount.com'
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      # ----------------------------- START -----------------------------
+      - name: Start A/B - deploy challenger and split traffic
+        if: github.event.inputs.action == 'start'
+        env:
+          PCT: ${{ github.event.inputs.challenger_percent }}
+          MODEL_URI: ${{ github.event.inputs.challenger_model_uri }}
+          IMG_TAG: ${{ github.event.inputs.challenger_image }}
+        run: |
+          set -e
+          IMAGE="${REGION}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${AR_REPO}/${IMAGE_NAME}:${IMG_TAG:-latest}"
+
+          # Tag the current serving revision as "champion" (no traffic change).
+          CHAMPION=$(gcloud run services describe "$SERVICE" --region "$REGION" \
+            --format='value(status.latestReadyRevisionName)')
+          echo "Champion revision: $CHAMPION"
+          gcloud run services update-traffic "$SERVICE" --region "$REGION" \
+            --update-tags "champion=$CHAMPION"
+
+          # Deploy challenger revision: tagged, zero traffic, its own MODEL_VERSION.
+          EXTRA_ENV=""
+          if [ -n "$MODEL_URI" ]; then EXTRA_ENV=",GCS_MODEL_URI=${MODEL_URI}"; fi
+          gcloud run deploy "$SERVICE" \
+            --image "$IMAGE" \
+            --region "$REGION" \
+            --no-traffic --tag challenger \
+            --revision-suffix "ch-${{ github.run_number }}" \
+            --service-account "${{ secrets.RUNTIME_SA }}" \
+            --allow-unauthenticated --port 80 \
+            --update-env-vars "MODEL_VERSION=challenger-${{ github.run_number }}${EXTRA_ENV}"
+
+          # Split traffic: champion gets the rest, challenger gets PCT.
+          gcloud run services update-traffic "$SERVICE" --region "$REGION" \
+            --to-tags "champion=$((100 - PCT)),challenger=${PCT}"
+
+          echo "## A/B started" >> "$GITHUB_STEP_SUMMARY"
+          echo "- challenger: ${PCT}% traffic (MODEL_VERSION=challenger-${{ github.run_number }})" >> "$GITHUB_STEP_SUMMARY"
+          gcloud run services describe "$SERVICE" --region "$REGION" \
+            --format='value(status.traffic)' >> "$GITHUB_STEP_SUMMARY"
+
+      # ----------------------------- ANALYZE -----------------------------
+      - name: Set up Python
+        if: github.event.inputs.action == 'analyze'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Analyze A/B from BigQuery and notify Discord
+        if: github.event.inputs.action == 'analyze'
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_DEPLOY }}
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          WINDOW_HOURS: ${{ github.event.inputs.window_hours }}
+        run: |
+          pip install google-cloud-bigquery
+          python - <<'PY'
+          import json, os, urllib.request
+          from google.cloud import bigquery
+
+          project = os.environ["GCP_PROJECT_ID"]
+          hours = int(os.environ.get("WINDOW_HOURS", "24"))
+          client = bigquery.Client(project=project)
+          rows = list(client.query(f"""
+            SELECT model_version,
+                   COUNT(*) AS n,
+                   ROUND(AVG(prediction) * 100, 1) AS positive_rate
+            FROM `{project}.mlops.prediction_logs`
+            WHERE timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {hours} HOUR)
+            GROUP BY model_version
+            ORDER BY n DESC
+          """).result())
+
+          if not rows:
+              print("No predictions in window - nothing to analyze")
+              raise SystemExit(0)
+
+          total = sum(r["n"] for r in rows)
+          lines = [f"{r['model_version']}: {r['n']} ({round(r['n']/total*100,1)}%) · pos {r['positive_rate']}%" for r in rows]
+          champ = rows[0]
+          chall = max(rows[1:], key=lambda r: r["n"]) if len(rows) > 1 else None
+          verdict = "single version (no challenger traffic yet)"
+          if chall:
+              delta = round(chall["positive_rate"] - champ["positive_rate"], 1)
+              verdict = (f"champion **{champ['model_version']}** vs challenger "
+                         f"**{chall['model_version']}** · pos-rate delta {delta:+}%")
+          print("VERDICT:", verdict)
+          for l in lines: print(" -", l)
+
+          webhook = os.environ.get("WEBHOOK")
+          if webhook:
+              embed = {"embeds": [{
+                  "title": f"Model A/B Analysis - last {hours}h",
+                  "description": verdict,
+                  "color": 10181046,
+                  "fields": [{"name": r["model_version"],
+                              "value": f"{r['n']} preds · pos {r['positive_rate']}%",
+                              "inline": True} for r in rows[:6]],
+              }]}
+              req = urllib.request.Request(webhook, data=json.dumps(embed).encode(),
+                                           headers={"Content-Type": "application/json"})
+              urllib.request.urlopen(req, timeout=10)  # noqa: S310
+              print("Posted A/B verdict to Discord")
+          PY
+
+      # ----------------------------- PROMOTE -----------------------------
+      - name: Promote challenger to 100%
+        if: github.event.inputs.action == 'promote'
+        run: |
+          set -e
+          gcloud run services update-traffic "$SERVICE" --region "$REGION" \
+            --to-tags "challenger=100"
+          echo "Challenger promoted to 100% traffic" >> "$GITHUB_STEP_SUMMARY"
+
+      # ----------------------------- ROLLBACK -----------------------------
+      - name: Rollback to champion 100%
+        if: github.event.inputs.action == 'rollback'
+        run: |
+          set -e
+          gcloud run services update-traffic "$SERVICE" --region "$REGION" \
+            --to-tags "champion=100"
+          echo "Rolled back to champion (100% traffic)" >> "$GITHUB_STEP_SUMMARY"
+
+      # ----------------------------- NOTIFY -----------------------------
+      - name: Notify Discord (lifecycle action)
+        if: always() && github.event.inputs.action != 'analyze'
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_DEPLOY }}
+          STATUS: ${{ job.status }}
+          ACTION: ${{ github.event.inputs.action }}
+        run: |
+          if [ -z "$WEBHOOK" ]; then exit 0; fi
+          if [ "$STATUS" = "success" ]; then COLOR=3066993; else COLOR=15158332; fi
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          curl -H "Content-Type: application/json" -X POST "$WEBHOOK" -d "{
+            \"embeds\": [{
+              \"title\": \"Model A/B - ${ACTION} (${STATUS})\",
+              \"color\": ${COLOR},
+              \"fields\": [{\"name\": \"Run\", \"value\": \"[#${{ github.run_number }}](${RUN_URL})\"}]
+            }]
+          }" || true

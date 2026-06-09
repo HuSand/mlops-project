@@ -4,19 +4,14 @@ from pydantic import BaseModel, ConfigDict
 
 
 class InputData(BaseModel):
-    # The deployed model (CT pipeline) is trained on dataset.py's synthetic
-    # make_classification output: 10 numeric features named feature_0..feature_9.
-    # The serving contract must match those column names exactly.
-    feature_0: float
-    feature_1: float
-    feature_2: float
-    feature_3: float
-    feature_4: float
-    feature_5: float
-    feature_6: float
-    feature_7: float
-    feature_8: float
-    feature_9: float
+    # Matches the CT-trained insurance model's feature contract.
+    Gender: str
+    Age: int
+    HasDrivingLicense: int
+    RegionID: float
+    Switch: int
+    PastAccident: str
+    AnnualPremium: float
 
 
 class PredictResponse(BaseModel):

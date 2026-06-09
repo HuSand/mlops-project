@@ -4,41 +4,28 @@ import { useState } from "react";
 import Link from "next/link";
 import { postPredict, type InputData, type PredictResponse } from "@/lib/api";
 
-// Human-friendly form. The deployed model takes 10 numeric features
-// (feature_0..feature_9); we expose the 7 that map to insurance attributes and
-// send feature_7..9 as fixed defaults (they carry no business meaning).
-interface HumanForm {
-  gender: number;
-  age: number;
-  license: number;
-  region: number;
-  switched: number;
-  accident: number;
-  premium: number;
-}
-
 interface FieldDef {
-  name: keyof HumanForm;
+  name: keyof InputData;
   label: string;
   hint?: string;
   type: "number" | "select";
   step?: string;
-  options?: { label: string; value: number }[];
+  options?: { label: string; value: string | number }[];
 }
 
 const FIELDS: FieldDef[] = [
   {
-    name: "gender",
+    name: "Gender",
     label: "Gender",
     type: "select",
     options: [
-      { label: "Female", value: 0 },
-      { label: "Male", value: 1 },
+      { label: "Female", value: "Female" },
+      { label: "Male", value: "Male" },
     ],
   },
-  { name: "age", label: "Age", type: "number", step: "1", hint: "years" },
+  { name: "Age", label: "Age", type: "number", step: "1", hint: "years" },
   {
-    name: "license",
+    name: "HasDrivingLicense",
     label: "Driving license",
     type: "select",
     options: [
@@ -46,9 +33,9 @@ const FIELDS: FieldDef[] = [
       { label: "No", value: 0 },
     ],
   },
-  { name: "region", label: "Region ID", type: "number", step: "1" },
+  { name: "RegionID", label: "Region ID", type: "number", step: "1" },
   {
-    name: "switched",
+    name: "Switch",
     label: "Previously switched",
     type: "select",
     options: [
@@ -58,17 +45,17 @@ const FIELDS: FieldDef[] = [
     ],
   },
   {
-    name: "accident",
+    name: "PastAccident",
     label: "Past accident",
     type: "select",
     options: [
-      { label: "No", value: 0 },
-      { label: "Yes", value: 1 },
-      { label: "Unknown", value: 2 },
+      { label: "No", value: "No" },
+      { label: "Yes", value: "Yes" },
+      { label: "Unknown", value: "Unknown" },
     ],
   },
   {
-    name: "premium",
+    name: "AnnualPremium",
     label: "Annual premium",
     type: "number",
     step: "any",
@@ -76,40 +63,36 @@ const FIELDS: FieldDef[] = [
   },
 ];
 
-const DEFAULTS: HumanForm = {
-  gender: 0,
-  age: 35,
-  license: 1,
-  region: 12,
-  switched: 0,
-  accident: 0,
-  premium: 25000,
+const DEFAULTS: InputData = {
+  Gender: "Female",
+  Age: 46,
+  HasDrivingLicense: 1,
+  RegionID: 21,
+  Switch: 0,
+  PastAccident: "Yes",
+  AnnualPremium: 2305.4,
 };
 
-/** Map the human form to the model's feature_0..feature_9 contract. */
-function toModelInput(f: HumanForm): InputData {
-  return {
-    feature_0: f.gender,
-    feature_1: f.age,
-    feature_2: f.license,
-    feature_3: f.region,
-    feature_4: f.switched,
-    feature_5: f.accident,
-    feature_6: f.premium,
-    feature_7: 0,
-    feature_8: 0,
-    feature_9: 0,
-  };
-}
+// Fields whose value must be coerced to a number on input.
+const NUMERIC: (keyof InputData)[] = [
+  "Age",
+  "HasDrivingLicense",
+  "RegionID",
+  "Switch",
+  "AnnualPremium",
+];
 
 export default function PredictPage() {
-  const [form, setForm] = useState<HumanForm>(DEFAULTS);
+  const [form, setForm] = useState<InputData>(DEFAULTS);
   const [result, setResult] = useState<PredictResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  function update(name: keyof HumanForm, raw: string) {
-    setForm((prev) => ({ ...prev, [name]: Number(raw) }));
+  function update(name: keyof InputData, raw: string) {
+    setForm((prev) => ({
+      ...prev,
+      [name]: NUMERIC.includes(name) ? Number(raw) : raw,
+    }));
   }
 
   async function onSubmit(e: React.FormEvent) {
@@ -118,7 +101,7 @@ export default function PredictPage() {
     setError(null);
     setResult(null);
     try {
-      setResult(await postPredict(toModelInput(form)));
+      setResult(await postPredict(form));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -149,8 +132,7 @@ export default function PredictPage() {
           {FIELDS.map((f) => (
             <div className="field" key={f.name}>
               <label htmlFor={f.name}>
-                {f.label}{" "}
-                {f.hint && <span className="hint">({f.hint})</span>}
+                {f.label} {f.hint && <span className="hint">({f.hint})</span>}
               </label>
               {f.type === "select" ? (
                 <select
@@ -159,7 +141,7 @@ export default function PredictPage() {
                   onChange={(e) => update(f.name, e.target.value)}
                 >
                   {f.options!.map((o) => (
-                    <option key={o.value} value={String(o.value)}>
+                    <option key={String(o.value)} value={String(o.value)}>
                       {o.label}
                     </option>
                   ))}

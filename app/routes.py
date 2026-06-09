@@ -152,6 +152,68 @@ async def get_monitoring_ops():
         raise HTTPException(status_code=500, detail=f"BigQuery Error: {str(e)}")
 
 
+@router.get("/api/v1/ab/compare")
+async def get_ab_comparison(hours: int = 168):
+    """Compare model versions seen in prediction_logs — online A/B view.
+
+    Each Cloud Run revision logs predictions tagged with its MODEL_VERSION, so
+    grouping prediction_logs by model_version gives a live champion-vs-challenger
+    comparison (traffic share + positive-prediction rate) straight from BigQuery.
+    """
+    client = bigquery.Client(project=config.BQ_PROJECT)
+    table = _predlog_table()
+    try:
+        rows = [dict(r) for r in client.query(f"""
+            SELECT
+              model_version,
+              COUNT(*) AS n,
+              ROUND(AVG(prediction) * 100, 1) AS positive_rate,
+              MIN(timestamp) AS first_seen,
+              MAX(timestamp) AS last_seen
+            FROM `{table}`
+            WHERE timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {int(hours)} HOUR)
+            GROUP BY model_version
+            ORDER BY n DESC
+        """).result()]
+
+        for r in rows:
+            r["first_seen"] = r["first_seen"].isoformat() if r["first_seen"] else None
+            r["last_seen"] = r["last_seen"].isoformat() if r["last_seen"] else None
+            r["n"] = int(r["n"])
+
+        total = sum(r["n"] for r in rows)
+        for r in rows:
+            r["traffic_pct"] = round(r["n"] / total * 100, 1) if total else 0.0
+
+        # champion = most traffic; challenger = the other most-recently-seen version.
+        champion = rows[0] if rows else None
+        challenger = None
+        if champion and len(rows) > 1:
+            challenger = max(rows[1:], key=lambda r: r["last_seen"] or "")
+        comparison = None
+        if champion and challenger:
+            comparison = {
+                "champion": champion["model_version"],
+                "challenger": challenger["model_version"],
+                "positive_rate_delta": round(
+                    challenger["positive_rate"] - champion["positive_rate"], 1
+                ),
+            }
+
+        bq_logger.log_api_hit("/api/v1/ab/compare")
+        return {
+            "status": "success",
+            "data": {
+                "window_hours": int(hours),
+                "total_predictions": total,
+                "versions": rows,
+                "comparison": comparison,
+            },
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"BigQuery Error: {str(e)}")
+
+
 @router.get("/api/v1/monitoring/latest")
 async def get_latest_monitoring():
     """Fetch the latest drift metrics from BigQuery for the dashboard."""
