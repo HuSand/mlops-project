@@ -109,6 +109,27 @@ jobs:
       - run: pip install "dvc[gs]"
       - run: pip install -r requirements.txt
       - run: dvc pull --force
+      - name: Ensure champion exists in MLflow
+        run: |
+          python -c "
+          import mlflow, os
+          mlflow.set_tracking_uri(os.environ['MLFLOW_TRACKING_URI'])
+          client = mlflow.tracking.MlflowClient()
+          try:
+              prod = client.get_latest_versions('insurance_model', stages=['Production'])
+              if not prod:
+                  versions = client.search_model_versions(\"name='insurance_model'\")
+                  if versions:
+                      latest = sorted(versions, key=lambda x: int(x.version))[-1]
+                      client.transition_model_version_stage('insurance_model', latest.version, 'Production')
+                      print(f'Auto-set version {latest.version} to Production')
+                  else:
+                      print('No existing model found, will use newly trained model as champion')
+              else:
+                  print(f'Champion exists: version {prod[0].version}')
+          except Exception as e:
+              print(f'Warning: {e}')
+          "
       - run: python main.py
       - name: Get MLflow run ID
         id: get-run-id
