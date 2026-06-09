@@ -15,3 +15,5 @@ BQ_PROJECT = os.getenv("BQ_PROJECT")  # defaults to ADC project when None
 BQ_DATASET = os.getenv("BQ_DATASET", "mlops")
 BQ_TABLE = os.getenv("BQ_TABLE", "prediction_logs")
 BQ_MONITOR_TABLE = os.getenv("BQ_MONITOR_TABLE", "drift_metrics")
+# API hits are logged here and aggregated every 6h by api-hit-digest.yml.
+BQ_API_HITS_TABLE = os.getenv("BQ_API_HITS_TABLE", "api_hits")

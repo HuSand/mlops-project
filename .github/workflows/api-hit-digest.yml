@@ -1,0 +1,82 @@
+name: API Hit Digest (6h)
+
+# Aggregates API hits logged to BigQuery (mlops.api_hits) over the last 6 hours
+# into a single Discord summary, instead of notifying on every request. Sends
+# nothing when there were no hits in the window.
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  digest:
+    name: Aggregate API hits and notify Discord
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: 'projects/721834211942/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+          service_account: 'mlops-ct-pipeline@project-d50e88c7-b681-48d4-b1b.iam.gserviceaccount.com'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - run: pip install google-cloud-bigquery
+
+      - name: Aggregate last 6h and post digest
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_DEPLOY }}
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import urllib.request
+          from google.cloud import bigquery
+
+          project = os.environ["GCP_PROJECT_ID"]
+          client = bigquery.Client(project=project)
+          query = f"""
+            SELECT endpoint, COUNT(*) AS n
+            FROM `{project}.mlops.api_hits`
+            WHERE timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 6 HOUR)
+            GROUP BY endpoint
+            ORDER BY n DESC
+          """
+          rows = list(client.query(query).result())
+          total = sum(r["n"] for r in rows)
+
+          if total == 0:
+              print("No API hits in the last 6h - skipping Discord notification")
+              raise SystemExit(0)
+
+          webhook = os.environ.get("WEBHOOK")
+          if not webhook:
+              print("No Discord webhook configured - skipping")
+              raise SystemExit(0)
+
+          fields = [
+              {"name": r["endpoint"], "value": str(r["n"]), "inline": True}
+              for r in rows
+          ]
+          embed = {
+              "embeds": [{
+                  "title": f"API Hit Digest - last 6h ({total} requests)",
+                  "color": 3447003,
+                  "fields": fields,
+              }]
+          }
+          req = urllib.request.Request(
+              webhook,
+              data=json.dumps(embed).encode(),
+              headers={"Content-Type": "application/json"},
+          )
+          urllib.request.urlopen(req, timeout=10)  # noqa: S310
+          print(f"Posted digest: {total} hits across {len(rows)} endpoint(s)")
+          PY

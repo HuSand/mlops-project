@@ -95,6 +95,8 @@ async def get_business_insights():
         for r in trend:
             r["date"] = str(r["date"])
 
+        bq_logger.log_api_hit("/api/v1/insights/business")
+
         return {
             "status": "success",
             "data": {
@@ -133,6 +135,8 @@ async def get_monitoring_ops():
             SELECT model_version, COUNT(*) AS n
             FROM `{table}` GROUP BY model_version ORDER BY n DESC
         """).result()]
+
+        bq_logger.log_api_hit("/api/v1/monitoring/ops")
 
         last_ts = summary.get("last_prediction_ts")
         return {
@@ -173,13 +177,7 @@ async def get_latest_monitoring():
             except Exception:
                 drifted_features = []
 
-        bq_logger.notify_api_hit(
-            "/api/v1/monitoring/latest",
-            {
-                "drift_detected": bool(row.dataset_drift),
-                "drift_share": float(row.drift_share) if row.drift_share else 0.0,
-            },
-        )
+        bq_logger.log_api_hit("/api/v1/monitoring/latest")
 
         return {
             "status": "success",

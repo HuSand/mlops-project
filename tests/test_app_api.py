@@ -95,7 +95,7 @@ class _FakeBQClient:
 
 def _patch_bq(monkeypatch, rows):
     monkeypatch.setattr(routes.bigquery, "Client", lambda *a, **k: _FakeBQClient(rows))
-    monkeypatch.setattr(routes.bq_logger, "notify_api_hit", lambda *a, **k: None)
+    monkeypatch.setattr(routes.bq_logger, "log_api_hit", lambda *a, **k: None)
 
 
 def test_monitoring_latest_success(client, monkeypatch):
