@@ -107,7 +107,7 @@ def test_cleaner_annual_premium_dtype():
     assert cleaned['AnnualPremium'].dtype == float
 
 def test_predictor_feature_target_separator(sample_train_data):
-    predictor = Predictor()
+    predictor = Predictor(load_immediately=False)
     X, y = predictor.feature_target_separator(sample_train_data)
     assert 'target' not in X.columns
     assert len(y) == len(sample_train_data)
@@ -115,7 +115,7 @@ def test_predictor_feature_target_separator(sample_train_data):
 def test_predictor_evaluate_model(trainer, sample_train_data):
     X, y = trainer.feature_target_separator(sample_train_data)
     trainer.train_model(X, y)
-    predictor = Predictor()
+    predictor = Predictor(load_immediately=False)
     X_test, y_test = predictor.feature_target_separator(sample_train_data)
     accuracy, report, roc_auc = predictor.evaluate_model(X_test, y_test)
     assert 0 <= accuracy <= 1
