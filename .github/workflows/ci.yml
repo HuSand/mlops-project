@@ -47,9 +47,9 @@ jobs:
 
       - name: Docker Build Test
         run: |
-          if [ -f Dockerfile ]; then
+          if [ -f dockerfile ]; then
             docker build -t insurance-api-test .
           else
-            echo "Dockerfile tidak ditemukan! Build gagal."
+            echo "dockerfile tidak ditemukan! Build gagal."
             exit 1
           fi
