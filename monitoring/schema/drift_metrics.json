@@ -34,5 +34,15 @@
         "type": "STRING",
         "mode": "NULLABLE",
         "description": "JSON string containing details of drifted features"
+    },
+    {
+        "name": "missing_values_count",
+        "type": "INTEGER",
+        "mode": "NULLABLE"
+    },
+    {
+        "name": "total_rows",
+        "type": "INTEGER",
+        "mode": "NULLABLE"
     }
 ]

@@ -108,29 +108,33 @@ def run_drift_report(reference_path: str, current_path: str, output_html: str, o
     report.save_html(output_html)
     print(f"HTML report saved: {output_html}")
 
-    # 5. Extract Metrics untuk JSON (digunakan untuk Alerting)
+    # 5. Extract Metrics untuk JSON (digunakan untuk Alerting & Dashboard)
     result = report.as_dict()
-    
-    # Inisialisasi ringkasan drift
+
+    # Inisialisasi ringkasan
     drift_metrics = {
         "drift_share": 0.0,
         "number_of_drifted_columns": 0,
         "number_of_columns": 0,
         "dataset_drift": False,
         "drifted_features": [],
+        "data_quality": {
+            "missing_values_count": 0,
+            "total_rows": len(current)
+        }
     }
 
-    # Cari metrik drift di dalam kamus hasil
+    # Cari metrik di dalam kamus hasil
     for metric in result.get("metrics", []):
-        # Evidently v0.4+ menggunakan nama class metric sebagai key
         res = metric.get("result", {})
+
+        # Ekstrak Data Drift
         if "dataset_drift" in res:
             drift_metrics["drift_share"] = res.get("share_of_drifted_columns", 0)
             drift_metrics["number_of_drifted_columns"] = res.get("number_of_drifted_columns", 0)
             drift_metrics["number_of_columns"] = res.get("number_of_columns", 0)
             drift_metrics["dataset_drift"] = res.get("dataset_drift", False)
-            
-            # List fitur mana saja yang drift
+
             for col, data in res.get("drift_by_columns", {}).items():
                 if data.get("drift_detected"):
                     drift_metrics["drifted_features"].append({
@@ -138,7 +142,12 @@ def run_drift_report(reference_path: str, current_path: str, output_html: str, o
                         "drift_score": data.get("drift_score")
                     })
 
+        # Ekstrak Data Quality (Missing Values)
+        if "dataset_stats" in res:
+            drift_metrics["data_quality"]["missing_values_count"] = res.get("number_of_missing_values", 0)
+
     with open(output_json, "w") as f:
+
         json.dump(drift_metrics, f, indent=2)
 
     print(f"Metrics JSON saved: {output_json}")

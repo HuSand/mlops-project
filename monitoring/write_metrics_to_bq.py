@@ -27,6 +27,8 @@ def write_metrics(project_id: str, metrics_file: str):
         "number_of_columns": metrics.get("number_of_columns", 0),
         "dataset_drift": metrics.get("dataset_drift", False),
         "drifted_features": json.dumps(metrics.get("drifted_features", [])),
+        "missing_values_count": metrics.get("data_quality", {}).get("missing_values_count", 0),
+        "total_rows": metrics.get("data_quality", {}).get("total_rows", 0),
     }
 
     try:

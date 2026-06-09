@@ -48,6 +48,10 @@ async def get_latest_monitoring():
                     "drifted_columns_count": int(row.number_of_drifted_columns) if row.number_of_drifted_columns else 0
                 },
                 "drift_details": drifted_features,
+                "data_health": {
+                    "missing_values_count": int(row.missing_values_count) if row.missing_values_count is not None else 0,
+                    "total_predictions": int(row.total_rows) if row.total_rows is not None else 0
+                },
                 "report_url": f"https://storage.googleapis.com/mlops-monitoring-reports/reports/drift_report_{row.date}.html"
             }
         }
