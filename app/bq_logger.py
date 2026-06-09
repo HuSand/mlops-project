@@ -51,6 +51,33 @@ def log_prediction(payload: dict, prediction: int | None = None) -> None:
     except Exception as e:  # noqa: BLE001 - logging must never break /predict
         logger.warning("BQ prediction logging failed (non-fatal): %s", e)
 
+def notify_api_hit(endpoint: str, detail: dict | None = None) -> None:
+    """Kirim notifikasi ke Discord setiap endpoint backend di-hit.
+
+    Webhook diambil dari env ``DISCORD_WEBHOOK_API`` (di-set di Cloud Run oleh
+    cd-backend). No-op kalau env kosong; best-effort dan tidak pernah membuat
+    request gagal.
+    """
+    webhook_url = os.environ.get("DISCORD_WEBHOOK_API")
+    if not webhook_url:
+        return
+    try:
+        fields = [{"name": "Endpoint", "value": str(endpoint), "inline": True}]
+        for key, value in (detail or {}).items():
+            fields.append({"name": str(key), "value": str(value), "inline": True})
+        embed = {
+            "embeds": [{
+                "title": "API Hit",
+                "color": 3447003,  # blue
+                "fields": fields,
+                "footer": {"text": f"env: {config.APP_ENV} · v{config.MODEL_VERSION}"},
+            }]
+        }
+        requests.post(webhook_url, json=embed, timeout=5)
+    except Exception as e:  # noqa: BLE001 - notifikasi tidak boleh memecah request
+        logger.warning("Discord API-hit notification failed (non-fatal): %s", e)
+
+
 def notify_discord(payload: dict, prediction: int) -> None:
     """Kirim notifikasi ke Discord setiap ada prediksi masuk."""
     webhook_url = os.environ.get("DISCORD_WEBHOOK_PREDICT")

@@ -14,7 +14,6 @@ try:
         DataDriftPreset,
         TargetDriftPreset,
         DataQualityPreset,
-        ClassificationPreset,
     )
     from evidently.metrics import ColumnDriftMetric
 except ImportError:
@@ -23,7 +22,6 @@ except ImportError:
         DataDriftPreset,
         TargetDriftPreset,
         DataQualityPreset,
-        ClassificationPreset,
     )
     from evidently.legacy.metrics import ColumnDriftMetric
 

@@ -51,4 +51,48 @@ jobs:
         run: vercel build ${{ steps.tgt.outputs.prod_flag }} --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Deploy to Vercel
-        run: vercel deploy --prebuilt ${{ steps.tgt.outputs.prod_flag }} --token=${{ secrets.VERCEL_TOKEN }}
+        id: deploy
+        run: |
+          URL=$(vercel deploy --prebuilt ${{ steps.tgt.outputs.prod_flag }} --token=${{ secrets.VERCEL_TOKEN }})
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "Deployed to $URL"
+
+      - name: Smoke test deployment
+        run: |
+          URL="${{ steps.deploy.outputs.url }}"
+          for i in 1 2 3 4 5; do
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" "$URL" || echo "000")
+            echo "Attempt $i: HTTP $CODE"
+            # 2xx/3xx = reachable. 401/403 = deployed but behind Vercel Deployment
+            # Protection (auth wall) -> still a successful deploy.
+            case "$CODE" in
+              2??|3??|401|403) echo "Deployment reachable ($CODE)"; exit 0 ;;
+            esac
+            sleep 10
+          done
+          echo "Smoke test failed (no response / server error)"
+          exit 1
+
+      - name: Notify Discord (deploy)
+        if: always()
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_DEPLOY }}
+          STATUS: ${{ job.status }}
+          ENVIRONMENT: ${{ steps.tgt.outputs.env }}
+          URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          if [ -z "$WEBHOOK" ]; then echo "No Discord webhook configured"; exit 0; fi
+          if [ "$STATUS" = "success" ]; then COLOR=3066993; else COLOR=15158332; fi
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          curl -H "Content-Type: application/json" -X POST "$WEBHOOK" -d "{
+            \"embeds\": [{
+              \"title\": \"CD Frontend - ${STATUS}\",
+              \"color\": ${COLOR},
+              \"fields\": [
+                {\"name\": \"Environment\", \"value\": \"${ENVIRONMENT:-n/a}\", \"inline\": true},
+                {\"name\": \"Commit\", \"value\": \"${GITHUB_SHA:0:7}\", \"inline\": true},
+                {\"name\": \"URL\", \"value\": \"${URL:-n/a}\"},
+                {\"name\": \"Run\", \"value\": \"[#${{ github.run_number }}](${RUN_URL})\"}
+              ]
+            }]
+          }" || true

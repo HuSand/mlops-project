@@ -4,5 +4,5 @@ target-version = "py310"
 exclude = [".git", "venv", "__pycache__", ".github"]
 
 [tool.pytest.ini_options]
-addopts = "--cov=steps --cov=ml --cov-fail-under=70 -v"
+addopts = "--cov=steps --cov=ml --cov=app --cov-fail-under=70 -v"
 testpaths = ["tests", "backend/tests", "ml/tests"]

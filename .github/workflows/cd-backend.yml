@@ -119,4 +119,65 @@ jobs:
             --allow-unauthenticated \
             --port 80 \
             --service-account "${{ secrets.RUNTIME_SA }}" \
-            --set-env-vars "APP_ENV=${APP_ENV},MODEL_VERSION=${MODEL_VERSION},GCS_MODEL_URI=${{ secrets.GCS_MODEL_URI }},ENABLE_BQ_LOGGING=true,BQ_PROJECT=${{ secrets.GCP_PROJECT_ID }},BQ_DATASET=mlops,BQ_TABLE=prediction_logs"
+            --set-env-vars "APP_ENV=${APP_ENV},MODEL_VERSION=${MODEL_VERSION},GCS_MODEL_URI=${{ secrets.GCS_MODEL_URI }},
+            ENABLE_BQ_LOGGING=true,BQ_PROJECT=${{ secrets.GCP_PROJECT_ID }},BQ_DATASET=mlops,BQ_TABLE=prediction_logs"
+
+      # Set the Discord webhook the running service uses to notify on API hits.
+      # Done as a separate update so the main --set-env-vars block is untouched.
+      - name: Set Discord webhook env on Cloud Run
+        if: steps.guard.outputs.configured == 'true'
+        env:
+          SERVICE: ${{ steps.target.outputs.service }}
+        run: |
+          gcloud run services update "$SERVICE" \
+            --region "$REGION" \
+            --update-env-vars "DISCORD_WEBHOOK_API=${{ secrets.DISCORD_WEBHOOK_DEPLOY }}" \
+            --quiet
+
+      # Post-deploy smoke test: the new revision must answer its health check.
+      - name: Smoke test deployed service
+        id: smoke
+        if: steps.guard.outputs.configured == 'true'
+        env:
+          SERVICE: ${{ steps.target.outputs.service }}
+        run: |
+          URL=$(gcloud run services describe "$SERVICE" --region "$REGION" --format='value(status.url)')
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          echo "Hitting $URL/ ..."
+          for i in 1 2 3 4 5; do
+            if curl -fsS "$URL/" -o /tmp/health.json; then
+              cat /tmp/health.json
+              exit 0
+            fi
+            echo "Attempt $i failed, retrying in 10s..."
+            sleep 10
+          done
+          echo "Health check failed after retries"
+          exit 1
+
+      # Notify Discord on every CD run (success or failure).
+      - name: Notify Discord (deploy)
+        if: always()
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_DEPLOY }}
+          STATUS: ${{ job.status }}
+          SERVICE: ${{ steps.target.outputs.service }}
+          APP_ENV: ${{ steps.target.outputs.app_env }}
+          URL: ${{ steps.smoke.outputs.url }}
+        run: |
+          if [ -z "$WEBHOOK" ]; then echo "No Discord webhook configured"; exit 0; fi
+          if [ "$STATUS" = "success" ]; then COLOR=3066993; else COLOR=15158332; fi
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          curl -H "Content-Type: application/json" -X POST "$WEBHOOK" -d "{
+            \"embeds\": [{
+              \"title\": \"CD Backend - ${STATUS}\",
+              \"color\": ${COLOR},
+              \"fields\": [
+                {\"name\": \"Service\", \"value\": \"${SERVICE:-n/a}\", \"inline\": true},
+                {\"name\": \"Env\", \"value\": \"${APP_ENV:-n/a}\", \"inline\": true},
+                {\"name\": \"Commit\", \"value\": \"${GITHUB_SHA:0:7}\", \"inline\": true},
+                {\"name\": \"URL\", \"value\": \"${URL:-n/a}\"},
+                {\"name\": \"Run\", \"value\": \"[#${{ github.run_number }}](${RUN_URL})\"}
+              ]
+            }]
+          }" || true
