@@ -230,7 +230,7 @@ jobs:
           if [ -n "${{ secrets.DISCORD_WEBHOOK_ALERT }}" ]; then
             curl -H "Content-Type: application/json" -d "{
               \"embeds\": [{
-                \"title\": \"Daily Drift Report - ${DATE}\",
+                \"title\": \"Daily Drift Report #${{ github.run_number }} - ${DATE}\",
                 \"color\": ${COLOR},
                 \"fields\": [
                   {\"name\": \"Status\", \"value\": \"${STATUS}\", \"inline\": true},
