@@ -1,7 +1,6 @@
 """Generate a markdown model card from MLflow run information."""
 
 import argparse
-import json
 import os
 from datetime import datetime
 from pathlib import Path
