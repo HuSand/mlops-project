@@ -115,8 +115,12 @@ def test_predictor_feature_target_separator(sample_train_data):
 def test_predictor_evaluate_model(trainer, sample_train_data):
     X, y = trainer.feature_target_separator(sample_train_data)
     trainer.train_model(X, y)
-    predictor = Predictor(load_immediately=False)
+    
+    # Masukkan trainer.pipeline langsung ke sini!
+    predictor = Predictor(load_immediately=False, pipeline=trainer.pipeline)
+    
     X_test, y_test = predictor.feature_target_separator(sample_train_data)
     accuracy, report, roc_auc = predictor.evaluate_model(X_test, y_test)
+    
     assert 0 <= accuracy <= 1
     assert 0 <= roc_auc <= 1

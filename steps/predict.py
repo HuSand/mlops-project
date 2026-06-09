@@ -4,12 +4,15 @@ import yaml
 from sklearn.metrics import accuracy_score, classification_report, roc_auc_score
 
 class Predictor:
-    # Kita tambahkan parameter load_immediately di sini
-    def __init__(self, load_immediately=True):
+    def __init__(self, load_immediately=True, pipeline=None):
         self.model_path = self.load_config()['model']['store_path']
-        self.pipeline = None
-        if load_immediately:
+        # Prioritaskan pipeline yang diberikan, kalau tidak ada baru load dari file
+        if pipeline is not None:
+            self.pipeline = pipeline
+        elif load_immediately:
             self.pipeline = self.load_model()
+        else:
+            self.pipeline = None
 
     def load_config(self):
         with open('config.yml', 'r') as config_file:
