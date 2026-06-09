@@ -109,6 +109,9 @@ jobs:
       - run: pip install "dvc[gs]"
       - run: pip install -r requirements.txt
       - run: dvc pull --force
+      - name: Continuous Learning — merge BigQuery data
+        run: |
+          python scripts/continuous_learning.py || echo "Continuous learning skipped (no new data)"
       - name: Ensure champion exists in MLflow
         run: |
           python -c "
