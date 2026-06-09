@@ -15,74 +15,29 @@ interface FieldDef {
   options?: Option[];
 }
 
-const FIELDS: FieldDef[] = [
-  {
-    name: "Gender",
-    label: "Gender",
-    type: "select",
-    options: [
-      { label: "Female", value: "Female" },
-      { label: "Male", value: "Male" },
-    ],
-  },
-  { name: "Age", label: "Age", type: "number", step: "1" },
-  {
-    name: "HasDrivingLicense",
-    label: "Driving license",
-    type: "select",
-    options: [
-      { label: "Yes", value: 1 },
-      { label: "No", value: 0 },
-    ],
-  },
-  { name: "RegionID", label: "Region ID", type: "number", step: "any" },
-  {
-    name: "Switch",
-    label: "Previously switched",
-    hint: "(1 = yes, 0 = no, -1 = unknown)",
-    type: "select",
-    options: [
-      { label: "No (0)", value: 0 },
-      { label: "Yes (1)", value: 1 },
-      { label: "Unknown (-1)", value: -1 },
-    ],
-  },
-  {
-    name: "PastAccident",
-    label: "Past accident",
-    type: "select",
-    options: [
-      { label: "Yes", value: "Yes" },
-      { label: "No", value: "No" },
-      { label: "Unknown", value: "Unknown" },
-    ],
-  },
-  {
-    name: "AnnualPremium",
-    label: "Annual premium",
-    hint: "(currency amount)",
-    type: "number",
-    step: "any",
-  },
-];
+// The deployed model expects 10 numeric features (feature_0..feature_9).
+const FIELDS: FieldDef[] = Array.from({ length: 10 }, (_, i) => ({
+  name: `feature_${i}` as keyof InputData,
+  label: `Feature ${i}`,
+  type: "number",
+  step: "any",
+}));
 
+// A non-trivial sample so the form doesn't submit all zeros.
 const DEFAULTS: InputData = {
-  Gender: "Female",
-  Age: 46,
-  HasDrivingLicense: 1,
-  RegionID: 21.0,
-  Switch: 0,
-  PastAccident: "Yes",
-  AnnualPremium: 2305.4,
+  feature_0: 0.5,
+  feature_1: -0.3,
+  feature_2: 1.2,
+  feature_3: 0.0,
+  feature_4: -1.0,
+  feature_5: 0.8,
+  feature_6: 0.2,
+  feature_7: -0.5,
+  feature_8: 1.0,
+  feature_9: -0.2,
 };
 
-const NUMERIC: (keyof InputData)[] = [
-  "Age",
-  "HasDrivingLicense",
-  "RegionID",
-  "Switch",
-  "AnnualPremium",
-];
+const NUMERIC: (keyof InputData)[] = FIELDS.map((f) => f.name);
 
 export default function PredictPage() {
   const [form, setForm] = useState<InputData>(DEFAULTS);

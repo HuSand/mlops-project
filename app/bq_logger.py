@@ -86,16 +86,16 @@ def notify_discord(payload: dict, prediction: int) -> None:
     try:
         label = "Tertarik Beli" if prediction == 1 else "Tidak Tertarik"
         color = 3066993 if prediction == 1 else 15158332
+        # Show the first few features generically (schema is feature_0..feature_9).
+        feature_fields = [
+            {"name": key, "value": str(value), "inline": True}
+            for key, value in list(payload.items())[:5]
+        ]
         embed = {
             "embeds": [{
                 "title": f"Prediksi Baru - {label}",
                 "color": color,
-                "fields": [
-                    {"name": "Gender", "value": str(payload.get("Gender", "-")), "inline": True},
-                    {"name": "Age", "value": str(payload.get("Age", "-")), "inline": True},
-                    {"name": "Annual Premium", "value": str(payload.get("AnnualPremium", "-")), "inline": True},
-                    {"name": "Past Accident", "value": str(payload.get("PastAccident", "-")), "inline": True},
-                    {"name": "Has Driving License", "value": str(payload.get("HasDrivingLicense", "-")), "inline": True},
+                "fields": feature_fields + [
                     {"name": "Result", "value": label, "inline": True},
                 ],
                 "footer": {"text": f"Model version: {config.MODEL_VERSION}"}

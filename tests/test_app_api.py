@@ -16,15 +16,7 @@ from app.main import app  # noqa: E402
 from app import model as model_mod  # noqa: E402
 from app import routes  # noqa: E402
 
-VALID_PAYLOAD = {
-    "Gender": "Male",
-    "Age": 30,
-    "HasDrivingLicense": 1,
-    "RegionID": 5,
-    "Switch": 0,
-    "PastAccident": "No",
-    "AnnualPremium": 1000.0,
-}
+VALID_PAYLOAD = {f"feature_{i}": float(i) / 10 for i in range(10)}
 
 
 @pytest.fixture
