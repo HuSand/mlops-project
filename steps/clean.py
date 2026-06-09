@@ -10,6 +10,9 @@ class Cleaner:
     def clean_data(self, data):
         columns_to_drop = ['id', 'SalesChannelID', 'VehicleAge', 'DaysSinceCreated']
         data = data.drop(columns=columns_to_drop, errors='ignore')
+        # BARU: Ubah string uang menjadi angka murni (float)
+        if 'AnnualPremium' in data.columns and data['AnnualPremium'].dtype == object:
+            data['AnnualPremium'] = data['AnnualPremium'].replace({r'£': '', r',': ''}, regex=True).astype(float)
         feature_cols = [col for col in data.columns if col != 'target']
         
         # Pisahkan kolom numerik dan kategorik
