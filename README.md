@@ -11,8 +11,8 @@
 
 **Anggota Tim:**
 - P1: Muhammad Daniel A. (CI Owner)
-- P2: Sandythia Lova R.K. (CT Owner)
-- P3: Gerald Marcell V.R. (CD Owner)
+- P2: Sandythia Lova R.K. (CD Owner)
+- P3: Gerald Marcell V.R. (CT Owner)
 - P4: Muhammad Ridho U. (CM Owner)
 
 ---
