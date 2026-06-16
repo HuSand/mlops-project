@@ -114,6 +114,11 @@ jobs:
       - name: Continuous Learning — merge BigQuery data
         run: |
           python scripts/continuous_learning.py || echo "Continuous learning skipped (no new data)"
+      - name: Push updated train.csv to GCS
+        run: |
+          dvc add data/train.csv
+          dvc push
+          echo "train.csv pushed to GCS"
       - name: Ensure champion exists in MLflow
         run: |
           python -c "
