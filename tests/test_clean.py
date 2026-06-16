@@ -60,3 +60,5 @@ def test_clean_data(cleaner, sample_data):
     IQR = Q3 - Q1
     upper_bound = Q3 + 1.5 * IQR
     assert (cleaned_data['AnnualPremium'] <= upper_bound).all()
+    
+# Baris ini ditambahkan untuk live demo CI presentasi final MLOps
