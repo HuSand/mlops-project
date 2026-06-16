@@ -14,11 +14,10 @@
 - P2: Sandythia Lova R.K. (CD Owner)
 - P3: Gerald Marcell V.R. (CT Owner)
 - P4: Muhammad Ridho U. (CM Owner)
-
 ---
 
 ## Table of Contents
-
+---
 1. [Executive Summary](#1-executive-summary)
 2. [Architecture Overview](#2-architecture-overview)
 3. [Tech Stack and Justification](#3-tech-stack-and-justification)
