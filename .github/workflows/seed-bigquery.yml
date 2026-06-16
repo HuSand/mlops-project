@@ -59,3 +59,57 @@ jobs:
           else:
               print(f'Berhasil insert {len(rows)} baris ke BigQuery')
           "
+      - name: Seed 500 rows to BigQuery
+        run: |
+          python -c "
+          from google.cloud import bigquery
+          import json, requests, os
+          from datetime import datetime, timezone, timedelta
+          import random
+
+          client = bigquery.Client(project='project-d50e88c7-b681-48d4-b1b')
+          table_id = 'project-d50e88c7-b681-48d4-b1b.mlops.prediction_logs'
+
+          rows = []
+          for i in range(500):
+              payload = {
+                  'Gender': random.choice(['Male', 'Female']),
+                  'Age': float(random.randint(20, 70)),
+                  'HasDrivingLicense': float(random.randint(0, 1)),
+                  'RegionID': float(random.randint(1, 52)),
+                  'Switch': float(random.choice([-1, 0, 1])),
+                  'PastAccident': random.choice(['Yes', 'No', 'Unknown']),
+                  'AnnualPremium': round(random.uniform(800, 6000), 2)
+              }
+              rows.append({
+                  'input_payload': json.dumps(payload),
+                  'timestamp': (datetime.now(timezone.utc) - timedelta(minutes=random.randint(1, 1440))).isoformat(),
+                  'prediction': random.randint(0, 1),
+                  'model_version': 'auto-seed'
+              })
+
+          errors = client.insert_rows_json(table_id, rows)
+          if errors:
+              print('Errors:', errors)
+              exit(1)
+          else:
+              print(f'Berhasil insert {len(rows)} baris ke BigQuery')
+              webhook_url = os.environ.get('DISCORD_WEBHOOK_PREDICT')
+              if webhook_url:
+                  embed = {
+                      'embeds': [{
+                          'title': 'BigQuery Seed Selesai',
+                          'color': 3447003,
+                          'fields': [
+                              {'name': 'Total Data', 'value': f'{len(rows)} baris berhasil dimasukkan', 'inline': True},
+                              {'name': 'Sumber', 'value': 'Daily Auto-Seed', 'inline': True},
+                              {'name': 'Tabel', 'value': 'mlops.prediction_logs', 'inline': True},
+                          ],
+                          'footer': {'text': 'CT Pipeline - Daily BigQuery Seed'}
+                      }]
+                  }
+                  requests.post(webhook_url, json=embed, timeout=5)
+                  print('Discord notification sent')
+          "
+        env:
+          DISCORD_WEBHOOK_PREDICT: ${{ secrets.DISCORD_WEBHOOK_PREDICT }}

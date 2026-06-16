@@ -2,6 +2,7 @@ import argparse
 import json
 import pandas as pd
 import sys
+from pathlib import Path
 
 # --- SAFE IMPORT STRATEGY ---
 try:
@@ -34,21 +35,28 @@ def run_drift_report(reference_path: str, current_path: str, output_html: str, o
 
     # 1. Load data
     try:
+        if not Path(current_path).exists():
+            print(f"SKIP_MONITORING: Current data file {current_path} not found.")
+            return None
+
         # Load and immediately reset index to avoid any indexing issues
         reference = pd.read_csv(reference_path).reset_index(drop=True)
         current = pd.read_csv(current_path).reset_index(drop=True)
+
+        if current.empty:
+            print("SKIP_MONITORING: Current data is empty.")
+            return None
+
     except Exception as e:
         print(f"ERROR: Gagal membaca file CSV: {e}")
         sys.exit(1)
 
     # 2. Sinkronisasi Nama Kolom
-    # Data Reference (Training) sekarang punya nama: Gender, Age, dll.
-    # Data Current (Production) dari BigQuery punya nama: feature_0, feature_1, dll.
-    
-    # Samakan kolom target/prediction agar bisa dibandingkan
-    reference = reference.rename(columns={"target": "prediction"})
+    # Data Reference (Training) punya nama: feature_0, feature_1, dll.
+    # Data Current (Production) dari BigQuery sudah punya nama: Gender, Age, dll.
 
-    mapping_for_current = {
+    # Mapping untuk mengubah feature_X di Reference menjadi nama asli
+    mapping_features = {
         "feature_0": "Gender",
         "feature_1": "Age",
         "feature_2": "HasDrivingLicense",
@@ -57,17 +65,21 @@ def run_drift_report(reference_path: str, current_path: str, output_html: str, o
         "feature_5": "PastAccident",
         "feature_6": "AnnualPremium"
     }
-    
+
+    # Samakan kolom target/prediction agar bisa dibandingkan
+    reference = reference.rename(columns={"target": "prediction"})
+
     print("--- SCHEMA CROSS-CHECK ---")
-    print(f"Reference Columns: {list(reference.columns)}")
+    print(f"Reference Raw Columns: {list(reference.columns)}")
     print(f"Current Raw Columns: {list(current.columns)}")
-    
-    # Ubah nama di data Current
-    current = current.rename(columns=mapping_for_current)
-    
-    # CRITICAL: Hapus kolom duplikat jika ada (misal Gender dan feature_0 sama-sama ada)
+
+    # Ubah nama di data Reference agar cocok dengan Current
+    reference = reference.rename(columns=mapping_features)
+
+    # CRITICAL: Hapus kolom duplikat jika ada
     reference = reference.loc[:, ~reference.columns.duplicated()]
     current = current.loc[:, ~current.columns.duplicated()]
+
     
     # 3. Definisikan Column Mapping
     column_mapping = ColumnMapping()
