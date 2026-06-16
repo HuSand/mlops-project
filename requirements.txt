@@ -18,3 +18,4 @@ scipy==1.11.3
 setuptools==70.3.0
 uvicorn==0.30.1
 # evidently @ git+https://github.com/evidentlyai/evidently.git
+google-cloud-storage==3.12.0
