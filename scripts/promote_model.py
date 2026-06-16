@@ -162,6 +162,32 @@ def main() -> int:
     except Exception as exc:
         print(f"ERROR: Failed to write decision JSON: {exc}")
         return 1
+    
+    # Simpan model ke GCS untuk visualisasi Sandy
+    try:
+        import joblib
+        from google.cloud import storage as gcs
+
+        gcs_client = gcs.Client()
+        bucket = gcs_client.bucket("mlflow-artifacts-mlops")
+
+        run_number = os.environ.get("GITHUB_RUN_NUMBER", "local")
+
+        # Download dan upload challenger model
+        challenger_path = mlflow.artifacts.download_artifacts(
+            f"runs:/{run_id}/model/model.pkl"
+        )
+        bucket.blob(f"models/history/challenger-run{run_number}.pkl").upload_from_filename(challenger_path)
+
+        # Download dan upload champion model
+        champion_path = mlflow.artifacts.download_artifacts(
+            "models:/insurance_model/Production/model/model.pkl"
+        )
+        bucket.blob(f"models/history/champion-run{run_number}.pkl").upload_from_filename(champion_path)
+
+        print(f"Models saved to GCS: challenger-run{run_number}.pkl, champion-run{run_number}.pkl")
+    except Exception as e:
+        print(f"Warning: Failed to save models to GCS (non-fatal): {e}")
 
     print(json.dumps(result, indent=2))
     return 0 
