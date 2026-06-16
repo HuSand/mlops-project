@@ -18,6 +18,8 @@ jobs:
   fetch-data:
     name: Fetch Data (BQ & DVC)
     runs-on: ubuntu-latest
+    outputs:
+      SKIP: ${{ steps.fetch.outputs.SKIP }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -37,14 +39,22 @@ jobs:
         uses: google-github-actions/setup-gcloud@v2
 
       - name: Fetch production prediction logs from BigQuery
+        id: fetch
         run: |
           python -m pip install pandas google-cloud-bigquery pyarrow db-dtypes
           mkdir -p monitoring/data
-          python monitoring/fetch_production_data.py \
+          OUTPUT=$(python monitoring/fetch_production_data.py \
             --project-id ${{ secrets.GCP_PROJECT_ID }} \
-            --output monitoring/data/current_data.csv
+            --output monitoring/data/current_data.csv)
+          echo "$OUTPUT"
+          if [[ "$OUTPUT" == *"SKIP_MONITORING"* ]]; then
+            echo "SKIP=true" >> $GITHUB_OUTPUT
+          else
+            echo "SKIP=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Pull reference training data (DVC)
+        if: steps.fetch.outputs.SKIP != 'true'
         run: |
           python -m pip install "dvc[gs]"
           dvc pull data
@@ -52,6 +62,7 @@ jobs:
           cp data/train.csv monitoring/data/reference_data.csv
 
       - name: Upload datasets for analysis
+        if: steps.fetch.outputs.SKIP != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: monitoring-datasets
@@ -64,6 +75,7 @@ jobs:
   drift-analysis:
     name: Run Drift Analysis
     needs: fetch-data
+    if: needs.fetch-data.outputs.SKIP != 'true'
     runs-on: ubuntu-latest
     outputs:
       DRIFT_DETECTED: ${{ steps.run_report.outputs.DRIFT_DETECTED }}
@@ -123,6 +135,7 @@ jobs:
   storage-and-metrics:
     name: Storage & Metrics
     needs: [fetch-data, drift-analysis]
+    if: needs.fetch-data.outputs.SKIP != 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository

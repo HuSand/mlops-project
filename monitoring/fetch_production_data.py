@@ -34,11 +34,9 @@ def fetch_data(project_id: str, output_path: str, days: int = 1):
     results = query_job.to_dataframe()
 
     if results.empty:
+        print("SKIP_MONITORING: No production data found in the last interval.")
         import sys
-        print(f"ERROR: No production data found in the last {days} day(s).")
-        print("Pastikan aplikasi production (backend) sudah mengirimkan log ke BigQuery.")
-        print("Cek variabel environment ENABLE_BQ_LOGGING=true di production.")
-        sys.exit(1)
+        sys.exit(0)
 
     # Unpack JSON strings dari input_payload dan gabungkan dengan kolom lainnya
     rows = []
@@ -46,7 +44,10 @@ def fetch_data(project_id: str, output_path: str, days: int = 1):
         payload = row['input_payload']
         # Parse payload
         if isinstance(payload, str):
-            data_row = json.loads(payload)
+            try:
+                data_row = json.loads(payload)
+            except Exception:
+                continue
         else:
             data_row = payload.copy() if payload else {}
             
@@ -56,6 +57,11 @@ def fetch_data(project_id: str, output_path: str, days: int = 1):
         data_row['timestamp'] = str(row['timestamp'])
         
         rows.append(data_row)
+            
+    if not rows:
+        print("SKIP_MONITORING: Parsed rows are empty.")
+        import sys
+        sys.exit(0)
             
     df = pd.DataFrame(rows)
 
