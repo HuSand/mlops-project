@@ -1,9 +1,7 @@
-import os
 import json
 import logging
 import pandas as pd
 from google.cloud import bigquery
-from datetime import datetime, timezone, timedelta
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s:%(levelname)s:%(message)s')
 
