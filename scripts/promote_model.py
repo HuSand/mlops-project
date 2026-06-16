@@ -165,7 +165,6 @@ def main() -> int:
     
     # Simpan model ke GCS untuk visualisasi Sandy
     try:
-        import joblib
         from google.cloud import storage as gcs
 
         gcs_client = gcs.Client()
