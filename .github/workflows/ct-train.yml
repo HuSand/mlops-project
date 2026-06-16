@@ -116,9 +116,16 @@ jobs:
           python scripts/continuous_learning.py || echo "Continuous learning skipped (no new data)"
       - name: Push updated train.csv to GCS
         run: |
-          dvc add data/train.csv
+          dvc add data/
           dvc push
-          echo "train.csv pushed to GCS"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git add data.dvc
+          git commit -m "chore(ct): update train.csv after CL run #${{ github.run_number }}" || echo "No changes"
+          git push origin ${{ github.ref_name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Ensure champion exists in MLflow
         run: |
           python -c "
