@@ -151,7 +151,9 @@ jobs:
     environment: prod
     env:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      # Separate Vercel project for the prod playground (dev uses VERCEL_PROJECT_ID
+      # in cd-frontend.yml). Both projects must have Root Directory = frontend.
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_PROD }}
     steps:
       - uses: actions/checkout@v4
 
