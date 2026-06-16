@@ -75,7 +75,11 @@ jobs:
           req = urllib.request.Request(
               webhook,
               data=json.dumps(embed).encode(),
-              headers={"Content-Type": "application/json"},
+              headers={
+                  "Content-Type": "application/json",
+                  # Discord/Cloudflare 403s the default python-urllib User-Agent.
+                  "User-Agent": "mlops-ci-bot/1.0",
+              },
           )
           urllib.request.urlopen(req, timeout=10)  # noqa: S310
           print(f"Posted digest: {total} hits across {len(rows)} endpoint(s)")
