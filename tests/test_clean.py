@@ -62,4 +62,4 @@ def test_clean_data(cleaner, sample_data):
     assert (cleaned_data['AnnualPremium'] <= upper_bound).all()
 
 # Baris ini ditambahkan untuk live demo CI presentasi final MLOps
-# Baris ini ditambahkan untuk live demo CI presentasi final MLOps part 2
+# Baris ini ditambahkan untuk live demo CI presentasi final MLOps part 2 tapi new branch
