@@ -76,7 +76,7 @@ export default function InsightsPage() {
       )}
 
       {state.kind === "error" && (
-        <div className="alert">⚠️ Could not load insights: {state.message}</div>
+        <div className="alert">⚠️ [Testing] Could not load insights: {state.message}</div>
       )}
 
       {state.kind === "ok" && state.data.status !== "success" && (
