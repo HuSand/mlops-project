@@ -90,7 +90,7 @@ jobs:
       - name: Set up Cloud SDK
         if: steps.guard.outputs.configured == 'true'
         uses: google-github-actions/setup-gcloud@v2
-
+          
       - name: Configure Docker for Artifact Registry
         if: steps.guard.outputs.configured == 'true'
         run: gcloud auth configure-docker ${REGION}-docker.pkg.dev --quiet
